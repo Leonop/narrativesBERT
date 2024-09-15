@@ -1,0 +1,11 @@
+git+https://github.com/MaartenGr/BERTopic.git@master
+cudf-cu12 --extra-index-url=https://pypi.nvidia.com
+dask-cudf-cu12 --extra-index-url=https://pypi.nvidia.com
+cuml-cu12 --extra-index-url=https://pypi.nvidia.com
+cugraph-cu12 --extra-index-url=https://pypi.nvidia.com
+cupy-cuda12x -f https://pip.cupy.dev/aarch64
+safetensors
+datasets
+datashader
+adjustText
+sentence-transformers==2.2.2
