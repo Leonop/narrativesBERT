@@ -2,3 +2,4 @@
 data/*
 bertopic_env
 model/*
+output/*
