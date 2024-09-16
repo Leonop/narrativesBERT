@@ -12,6 +12,11 @@ from bertopic import BERTopic
 from model_selection_hpc import *
 import os
 import global_options
+import seaborn as sns
+from matplotlib import pyplot as plt
+from adjustText import adjust_text
+import matplotlib.patheffects as pe
+import matplotlib.colors as mcolors
 
 class VisualizeTopics:
     def __init__(self, data_path, nrows, chunk_size, year_filter):
@@ -49,6 +54,45 @@ class VisualizeTopics:
         plt.xlabel("UMAP Dimension 1")
         plt.ylabel("UMAP Dimension 2")
         plt.legend(loc="best", bbox_to_anchor=(1.05, 1))
+        plt.show()
+        
+    def plot_and_save_figure(self, df, mean_df, topic_model, color_key, save_path="visualization_topics.pdf"):
+        """
+        Function to plot and save a figure as a PDF.
+        
+        Parameters:
+        df (pd.DataFrame): Dataframe containing x, y coordinates, Topic, Length, and color columns.
+        mean_df (pd.DataFrame): Dataframe containing Topic and x, y coordinates for annotation.
+        topic_model (BERTopic): BERTopic model to get the topic words.
+        color_key (dict): Dictionary mapping topics to colors.
+        save_path (str): Path to save the figure as a PDF.
+        """
+        fig, ax = plt.subplots(figsize=(16, 16))
+        
+        # Convert 'Topic' to string to ensure proper mapping
+        df['Topic'] = df['Topic'].astype(str)
+        df['color'] = df['Topic'].map(color_key)
+        
+        # Scatterplot
+        sns.scatterplot(data=df, x='x', y='y', ax=ax, hue='color', alpha=0.4, s=10, sizes=(0.4, 10), size="Length", legend=False)
+        
+        # Annotate top 50 topics
+        texts, xs, ys = [], [], []
+        for _, row in mean_df.iterrows():
+            topic = row["Topic"]
+            name = " - ".join(list(zip(*topic_model.get_topic(int(topic))))[0][:3])
+
+            if int(topic) <= 50:
+                xs.append(row["x"])
+                ys.append(row["y"])
+                texts.append(plt.text(row["x"], row["y"], name, size=10, ha="center", color=color_key[str(int(topic))],
+                                    path_effects=[pe.withStroke(linewidth=0.5, foreground="black")]))
+        
+        # Adjust annotations such that they do not overlap
+        adjust_text(texts, x=xs, y=ys, time_lim=1, force_text=(0.01, 0.02), force_static=(0.01, 0.02), force_pull=(0.5, 0.5))
+        
+        # Save the plot as a PDF
+        plt.savefig(save_path, format='pdf', dpi=600)
         plt.show()
         
 if __name__ == "__main__":
