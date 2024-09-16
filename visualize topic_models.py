@@ -17,13 +17,15 @@ from matplotlib import pyplot as plt
 from adjustText import adjust_text
 import matplotlib.patheffects as pe
 import matplotlib.colors as mcolors
+from scipy.cluster import hierarchy as sch
 
 class VisualizeTopics:
-    def __init__(self, data_path, nrows, chunk_size, year_filter):
-        self.data_path = data_path
-        self.nrows = nrows
-        self.chunk_size = chunk_size
-        self.year_filter = year_filter
+    def __init__(self, nrows, chunk_size, year_filter):
+        self.data_path = os.path.join(global_options.data_folder, global_options.data_filename)
+        self.nrows = global_options.NROWS
+        self.chunk_size = global_options.CHUNK_SIZE
+        self.year_filter = global_options.YEAR_FILTER
+        self.fig_folder = global_options.output_fig_folder
 
     def visualize_topics(self):
         # Load data from the CSV file
@@ -56,7 +58,7 @@ class VisualizeTopics:
         plt.legend(loc="best", bbox_to_anchor=(1.05, 1))
         plt.show()
         
-    def plot_and_save_figure(self, df, mean_df, topic_model, color_key, save_path="visualization_topics.pdf"):
+    def plot_and_save_figure(self, df, mean_df, topic_model, color_key):
         """
         Function to plot and save a figure as a PDF.
         
@@ -91,15 +93,41 @@ class VisualizeTopics:
         # Adjust annotations such that they do not overlap
         adjust_text(texts, x=xs, y=ys, time_lim=1, force_text=(0.01, 0.02), force_static=(0.01, 0.02), force_pull=(0.5, 0.5))
         
+        # check the fig output folder is exist
+        if not os.path.exists():
+            os.makedirs(self.fig_folder)
+        save_path= os.path.join(self.fig_folder, "visualization_topics.pdf")
         # Save the plot as a PDF
         plt.savefig(save_path, format='pdf', dpi=600)
         plt.show()
         
+    def hirachical_cluster_visualization(self, data, docs, topic_model):
+        """
+        Function to visualize the hierarchical clustering of the topics.
+        
+        Parameters:
+        data (pd.DataFrame): Dataframe containing the data.
+        docs (List[str]): List of documents.
+        topic_model (BERTopic): BERTopic model.
+        """
+        # The resulting hierarchical_topics is a dataframe in which merged topics are described.
+        #Hierachical topics
+        linkage_function = lambda x: sch.linkage(x, 'single', optimal_ordering=True)
+        hierarchical_topics = topic_model.hierarchical_topics(docs, linkage_function=linkage_function)
+        topic_model.visualize_hierarchy(hierarchical_topics=hierarchical_topics)
+        # Visualize the hierarchical topics
+        fig = topic_model.visualize_hierarchy()
+        # Plot and save the figure
+        # check if the fig folder is exist in output folder
+        if not os.path.exists(global_options.output_fig_folder):
+            os.makedirs(global_options.output_fig_folder)
+        fig.savefig(os.path.join(global_options.output_fig_folder, "visualization_hierarchical_topics.pdf"), format='pdf', dpi=600)
+                
 if __name__ == "__main__":
     data_path = os.path.join(global_options.data_folder, global_options.data_filename)
-    nrows = 10000
-    chunk_size = 1000
-    year_filter = 2020
+    nrows = global_options.NROWS
+    chunk_size = global_options.CHUNK_SIZE
+    year_filter = global_options.YEAR_FILTER
 
     visualizer = VisualizeTopics(data_path, nrows, chunk_size, year_filter)
     visualizer.visualize_topics()

@@ -9,13 +9,16 @@ N_TOP_WORDS = 15
 
 PROJECT_DIR = os.getcwd()
 data_folder = os.path.join(PROJECT_DIR, "data")
+output_folder = os.path.join(PROJECT_DIR, "output")
+output_fig_folder = os.path.join(output_folder, "fig")
 data_filename = 'earnings_calls_20231017.csv'
 
 NROWS = 10000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
 YEAR_FILTER = 2015 # filter the data based on the year
 
-N_NEIGHBORS = [10]
+# create a list of parameters to search over using GridSearchCV
+N_NEIGHBORS = [10] 
 N_COMPONENTS = [5]
 MIN_DIST = [0.5]
 MIN_SAMPLES = [5]
