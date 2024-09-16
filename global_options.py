@@ -7,19 +7,26 @@ N_TOP_WORDS = 15
 
 # Directory locations
 
-os.environ["PROJECT_DIR"] = "/home/zc_research/narrativesBERT"
-data_folder = os.path.join(os.environ["PROJECT_DIR"], "data")
+PROJECT_DIR = os.getcwd()
+data_folder = os.path.join(PROJECT_DIR, "data")
 data_filename = 'earnings_calls_20231017.csv'
 
-N_NEIGHBORS = 10
-N_COMPONENTS = 5
-MIN_DIST = 0.5
-MIN_SAMPLES = 5
-MIN_CLUSTER_SIZE = 20
-N_TOPICS = 100
-N_TOP_WORDS = 15
+NROWS = 10000 # number of rows to read from the csv file
+CHUNK_SIZE = 1000 # number of rows to read at a time
+YEAR_FILTER = 2015 # filter the data based on the year
+
+N_NEIGHBORS = [10]
+N_COMPONENTS = [5]
+MIN_DIST = [0.5]
+MIN_SAMPLES = [5]
+MIN_CLUSTER_SIZE = [20]
+N_TOPICS = [100]
+N_TOP_WORDS = [15]
+METRIC = ['cosine']
 EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2', 'all-MiniLM-L6-v2']
 
+# SAVE RESULTS 
+SAVE_RESULTS_COLS = ["params", "score", "probability"]
 SEED_WORDS : Dict[str, List[str]] = {
     # Financial Performance
     "revenue": ["revenue", "income statement", "sales", "top-line", "total revenue" ],
@@ -41,7 +48,8 @@ SEED_WORDS : Dict[str, List[str]] = {
     "return on assets": ["return on assets", "asset returns", "asset performance", "net income to assets", "asset profitability"],
     "return on investment": ["return on investment", "investment returns", "investment performance", "net income to investment", "investment profitability"],
     "productivity": ["automation", "capacity utilization", "cost cutting", "cost efficiency", "cost reduction", "cost saving", "digital transformation", "efficiency", "labor cost", "labor efficiency", "labor layoff", "labor productivity", "labour cost", "labour efficiency", "labour layoff", "labour productivity", "laid off", "lay off"],
-    "impairment": ["allowance", "write-off", "impairment charge", "asset impairment", "goodwill impairment"],
+    "asset impairment": ["allowance", "write-off", "impairment charge", "asset impairment", "goodwill impairment"],
+    "Coprporate tax": ["effective tax rate", "tax liabilities", "tax planning", "tax credits", "deferred taxes"],
     # Guidance and Outlook
     "next quarter guidance": ["short-term forecast", "upcoming quarter outlook", "near-term projections", "quarterly expectations", "forward guidance"],
     "full-year outlook": ["annual forecast", "yearly projection", "long-term guidance", "fiscal year outlook", "12-month projection"],
@@ -50,7 +58,7 @@ SEED_WORDS : Dict[str, List[str]] = {
     "Economic forecast": ["economic forecast", "macroeconomic outlook", "economic projections", "economic trends", "economic expectations"],
     # Market Position
     "market share": ["market share", "market dominance", "market leadership", "market position", "business footprint"],
-    "competitive landscape": ["competitive landscape", "competitive environment", "industry rivalry", "market competition", "competitor analysis", "competitive environment", "industry dynamics"],
+    "competitive landscape": ["competitive risk", "competitive environment", "industry rivalry", "market competition", "competitor analysis", "competitive environment", "industry dynamics"],
     "Brand strength": ["brand strength", "brand power", "brand health", "brand recognition", "brand equity", "brand value"],
     "Customer acquisition": ["new customer growth", "client onboarding", "customer wins", "new business generation", "expanding customer base"],
     "Customer retention rates": ["client loyalty", "churn rate", "customer stickiness", "repeat business", "customer longevity"],
@@ -129,6 +137,7 @@ SEED_WORDS : Dict[str, List[str]] = {
     "Trademark developments": ["brand protection", "trademark portfolio", "intellectual property rights", "brand assets", "trademark strategy"],
     "Licensing agreements": ["IP licensing", "technology transfer", "patent licensing", "trademark licensing", "copyright agreements"],
     "IP litigation": ["patent disputes", "trademark infringement", "copyright cases", "intellectual property lawsuits", "IP legal battles"],
+    "Corporate innovation": ["innovation", "r&d", "research development", "patent", "breakthrough technologies"],
     # Customer-centric Metrics:
     "Customer satisfaction scores": ["client happiness index", "satisfaction ratings", "customer feedback metrics", "service quality scores", "consumer contentment measures"],
     "Churn rate": ["customer attrition", "client loss rate", "turnover rate", "defection rate", "customer departure frequency"],

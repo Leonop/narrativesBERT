@@ -23,13 +23,14 @@ import collections
 from tqdm import tqdm
 from sklearn.feature_extraction.text import CountVectorizer
 import global_options
+from itertools import product
 
 # Global Variables
-current_path = os.getenv("PROJECT_DIR")
+current_path = global_options.PROJECT_DIR
 data_path = os.path.join(global_options.data_folder, global_options.data_filename)
-NROWS = 10000 # number of rows to read from the csv file
-CHUNK_SIZE = 1000000 # number of rows to read at a time
-YEAR_FILTER = 2025 # filter the data based on the year
+NROWS = global_options.NROWS # number of rows to read from the csv file
+CHUNK_SIZE = global_options.CHUNK_SIZE # number of rows to read at a time
+YEAR_FILTER = global_options.YEAR_FILTER # filter the data based on the year
 
 # how to import seedwords from global_variables.py
 # from global_variables import seedwords
@@ -149,7 +150,7 @@ def vectorize_doc(docs):
     for doc in tqdm(docs, total=len(docs)):
         vocab.update(tokenizer(doc))
     vocab = [word for word, frequency in vocab.items() if frequency > 15]; 
-    vocab = set([word for words in global_options.seedwords for word in words] + list(vocab))
+    vocab = set([word for words in global_options.SEED_WORDS for word in words] + list(vocab))
     
 
     vectorize_model = CountVectorizer(ngram_range=(1, 2), vocabulary=vocab, stop_words="english")
@@ -185,7 +186,7 @@ def evaluate_topic_model(params, docs, vectorizer_model):
         verbose=True
     )
     
-    topics, _ = topic_model.fit_transform(docs, embeddings)
+    topics, _prob = topic_model.fit_transform(docs, embeddings)
     
     # Evaluate coherence (using silhouette score as a placeholder for coherence)
     if len(set(topics)) > 1:  # Silhouette score requires more than one cluster
@@ -197,7 +198,7 @@ def evaluate_topic_model(params, docs, vectorizer_model):
     memory_usage = psutil.virtual_memory().percent
     print(f"Memory usage: {memory_usage}%")
     
-    return score
+    return score, _prob
 
 def save_csv(results, filename):
     """
@@ -210,17 +211,26 @@ def save_csv(results, filename):
     file_path = os.path.join(current_path, "output", filename)
     if not os.path.exists(os.path.join(current_path, "output")):
         os.makedirs(os.path.join(current_path, "output"))
-    df = pd.DataFrame(results, columns=["params", "score"])
+    df = pd.DataFrame(results, columns=global_options.SAVE_RESULTS_COLS)
     df.to_csv(file_path, index=False)
-
-if __name__ == "__main__":
+    
+# Main function
+def main():
+    # Embedding models to iterate over
     embedding_models = ['paraphrase-MiniLM-L6-v2', 'all-MiniLM-L6-v2']
+    
     for embedding_model in embedding_models:
         # Load data
-        meta, docs = load_data(data_path, nrows=NROWS, chunk_size=CHUNK_SIZE, year_filter=YEAR_FILTER)
+        print(f"Loading data for embedding model: {embedding_model}")
+        meta, docs = load_data(data_path, nrows=global_options.NROWS, 
+                               chunk_size=global_options.CHUNK_SIZE, year_filter=global_options.YEAR_FILTER)
+
         # Generate embeddings
+        print(f"Generating embeddings for {embedding_model}")
         embeddings = generate_embeddings(docs, embedding_model)
+        
         # Save embeddings
+        print(f"Saving embeddings for {embedding_model}")
         save_embeddings(embeddings, embedding_model)
 
     # Define parameter grid for optimization
@@ -228,27 +238,49 @@ if __name__ == "__main__":
         'n_neighbors': global_options.N_NEIGHBORS,
         'n_components': global_options.N_COMPONENTS,
         'min_dist': global_options.MIN_DIST,
-        'metric': 'cosine',
+        'metric': global_options.METRIC,
         'min_samples': global_options.MIN_SAMPLES,
         'min_cluster_size': global_options.MIN_CLUSTER_SIZE,
-        'embedding_model': global_options.EMBEDDING_MODELS,  # Smaller models
+        'embedding_model': global_options.EMBEDDING_MODELS  # List of embedding models
     }
+    # Vectorize the documents
+    print("Vectorizing documents...")
     vectorizer_model = vectorize_doc(docs)
+
     # Create a list of all parameter combinations
-    from itertools import product
+    print("Generating parameter combinations...")
     keys, values = zip(*param_grid.items())
     param_combinations = [dict(zip(keys, v)) for v in product(*values)]
+
     # Test each configuration and store results
     best_params = None
     best_score = -1
     results = []
-    for params in param_combinations:
+
+    print("Starting model evaluation with different parameter combinations...")
+    
+    # Adding a progress bar for the parameter search
+    for params in tqdm(param_combinations, desc="Evaluating params"):
         print(f"Testing params: {params}")
-        score = evaluate_topic_model(params, docs, vectorizer_model)
+        
+        # Evaluate the topic model with the current parameters
+        try:
+            score, probability = evaluate_topic_model(params, docs, vectorizer_model)
+        except Exception as e:
+            print(f"Error evaluating params: {params}, Error: {e}")
+            continue
+
+        # Update best parameters if a higher score is found
         if score > best_score:
             best_score = score
             best_params = params
-        print(f"Score: {score}, Best score: {best_score}, Best params: {best_params}")
-        results.append((params, score))
+
+        print(f"Score: {score}, Best score: {best_score}, Best params: {best_params}, Probability: {probability}")
+        results.append((params, score, probability))
+
     # Save results to a CSV file
+    print("Saving model selection results...")
     save_csv(results, "model_selection_results.csv")
+    
+if __name__ == "__main__":
+    main()
