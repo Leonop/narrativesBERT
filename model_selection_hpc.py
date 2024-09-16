@@ -22,17 +22,18 @@ import re
 import collections
 from tqdm import tqdm
 from sklearn.feature_extraction.text import CountVectorizer
+import global_options
 
 # Global Variables
-current_path = os.getcwd()
-data_path = os.path.join(current_path, 'data', 'earnings_calls_20231017.csv')
+current_path = os.getenv("PROJECT_DIR")
+data_path = os.path.join(global_options.data_folder, global_options.data_filename)
 NROWS = 10000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000000 # number of rows to read at a time
 YEAR_FILTER = 2025 # filter the data based on the year
 
-import os
-import pandas as pd
-from tqdm import tqdm
+# how to import seedwords from global_variables.py
+# from global_variables import seedwords
+
 
 def load_data(file_path, nrows=NROWS, chunk_size=CHUNK_SIZE, year_filter=YEAR_FILTER):
     """
@@ -147,7 +148,9 @@ def vectorize_doc(docs):
     tokenizer = CountVectorizer().build_tokenizer()
     for doc in tqdm(docs, total=len(docs)):
         vocab.update(tokenizer(doc))
-    vocab = [word for word, frequency in vocab.items() if frequency > 15]; len(vocab)
+    vocab = [word for word, frequency in vocab.items() if frequency > 15]; 
+    vocab = set([word for words in global_options.seedwords for word in words] + list(vocab))
+    
 
     vectorize_model = CountVectorizer(ngram_range=(1, 2), vocabulary=vocab, stop_words="english")
     return vectorize_model
@@ -196,6 +199,20 @@ def evaluate_topic_model(params, docs, vectorizer_model):
     
     return score
 
+def save_csv(results, filename):
+    """
+    Save the results to a CSV file.
+
+    Parameters:
+    results (list): List of tuples containing parameters and scores.
+    file_path (str): The file path to save the results.
+    """
+    file_path = os.path.join(current_path, "output", filename)
+    if not os.path.exists(os.path.join(current_path, "output")):
+        os.makedirs(os.path.join(current_path, "output"))
+    df = pd.DataFrame(results, columns=["params", "score"])
+    df.to_csv(file_path, index=False)
+
 if __name__ == "__main__":
     embedding_models = ['paraphrase-MiniLM-L6-v2', 'all-MiniLM-L6-v2']
     for embedding_model in embedding_models:
@@ -208,13 +225,13 @@ if __name__ == "__main__":
 
     # Define parameter grid for optimization
     param_grid = {
-        'n_neighbors': [10, 15, 30],
-        'n_components': [5, 10, 15],
-        'min_dist': [0.0, 0.1, 0.5],
-        'metric': ['cosine', 'euclidean'],
-        'min_samples': [5, 10, 20],
-        'min_cluster_size': [20, 50, 100],
-        'embedding_model': ['all-MiniLM-L6-v2', 'paraphrase-MiniLM-L6-v2'],  # Smaller models
+        'n_neighbors': global_options.N_NEIGHBORS,
+        'n_components': global_options.N_COMPONENTS,
+        'min_dist': global_options.MIN_DIST,
+        'metric': 'cosine',
+        'min_samples': global_options.MIN_SAMPLES,
+        'min_cluster_size': global_options.MIN_CLUSTER_SIZE,
+        'embedding_model': global_options.EMBEDDING_MODELS,  # Smaller models
     }
     vectorizer_model = vectorize_doc(docs)
     # Create a list of all parameter combinations
@@ -233,3 +250,5 @@ if __name__ == "__main__":
             best_params = params
         print(f"Score: {score}, Best score: {best_score}, Best params: {best_params}")
         results.append((params, score))
+    # Save results to a CSV file
+    save_csv(results, "model_selection_results.csv")
