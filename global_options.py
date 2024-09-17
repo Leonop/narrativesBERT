@@ -22,11 +22,11 @@ N_NEIGHBORS = [10]
 N_COMPONENTS = [5]
 MIN_DIST = [0.5]
 MIN_SAMPLES = [5]
-MIN_CLUSTER_SIZE = [50, 100, 200]
+MIN_CLUSTER_SIZE = [50, 75, 100, 150, 200]
 N_TOPICS = [100]
 N_TOP_WORDS = [15]
 METRIC = ['cosine']
-EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2', 'all-MiniLM-L6-v2']
+EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2'] #'all-MiniLM-L6-v2'
 
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
