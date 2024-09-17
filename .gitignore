@@ -3,3 +3,4 @@ data/*
 bertopic_env
 model/*
 output/*
+cuda_env/*
