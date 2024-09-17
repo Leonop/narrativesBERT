@@ -137,7 +137,7 @@ class VisualizeTopics:
         plt.savefig(save_path, format='pdf', dpi=600)
         return reduced_embeddings
     
-    def plot_and_save_figure(self, df, mean_df, topic_model):
+    def plot_and_save_figure(self, df, topic_model, docs):
         """
         Function to plot and save a figure as a PDF.
         
@@ -150,7 +150,16 @@ class VisualizeTopics:
         """
         colors = itertools.cycle(['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff', '#000000'])
         color_key = {str(topic): next(colors) for topic in set(topic_model.topics_) if topic != -1}
+        # Prepare dataframe and ignore outliers
+        df["Length"] = [len(doc) for doc in docs]
+        df = df.loc[df.Topic != "-1"]
+        df = df.loc[(df.y > -10) & (df.y < 10) & (df.x < 10) & (df.x > -10), :]
+        df["Topic"] = df["Topic"].astype("category")
 
+        # Get centroids of clusters
+        mean_df = df.groupby("Topic").mean().reset_index()
+        mean_df.Topic = mean_df.Topic.astype(int)
+        mean_df = mean_df.sort_values("Topic")
         fig, ax = plt.subplots(figsize=(16, 16))
         
         # Convert 'Topic' to string to ensure proper mapping
@@ -176,7 +185,7 @@ class VisualizeTopics:
         adjust_text(texts, x=xs, y=ys, time_lim=1, force_text=(0.01, 0.02), force_static=(0.01, 0.02), force_pull=(0.5, 0.5))
         
         # check the fig output folder is exist
-        if not os.path.exists():
+        if not os.path.exists(self.fig_folder):
             os.makedirs(self.fig_folder)
         save_path= os.path.join(self.fig_folder, "Topic_pic2.pdf")
         # Save the plot as a PDF

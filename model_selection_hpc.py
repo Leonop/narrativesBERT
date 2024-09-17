@@ -288,7 +288,7 @@ def main():
     vt = VisualizeTopics()
     reduced_embeddings_2d = vt.visualize_topics()
     _df = pd.DataFrame({"x": reduced_embeddings_2d[:, 0], "y": reduced_embeddings_2d[:, 1], "Topic": [str(t) for t in topic_model.topics_]})
-    vt.plot_and_save_figure(_df, reduced_embeddings_2d, topic_model)
+    vt.plot_and_save_figure(_df, topic_model, docs)
     vt.hirachical_cluster_visualization(docs, topic_model)
 if __name__ == "__main__":
     main()
