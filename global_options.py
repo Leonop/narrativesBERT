@@ -1,9 +1,9 @@
 import os
 from typing import Dict, List
 
-MIN_CLUSTER_SIZE = 20
-N_TOPICS = 100
-N_TOP_WORDS = 15
+# MIN_CLUSTER_SIZE = 20
+# N_TOPICS = 100
+# N_TOP_WORDS = 15
 
 # Directory locations
 
@@ -13,7 +13,7 @@ output_folder = os.path.join(PROJECT_DIR, "output")
 output_fig_folder = os.path.join(output_folder, "fig")
 data_filename = 'earnings_calls_20231017.csv'
 
-NROWS = 10000 # number of rows to read from the csv file
+NROWS = 10000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
 YEAR_FILTER = 2015 # filter the data based on the year
 
@@ -22,7 +22,7 @@ N_NEIGHBORS = [10]
 N_COMPONENTS = [5]
 MIN_DIST = [0.5]
 MIN_SAMPLES = [5]
-MIN_CLUSTER_SIZE = [20]
+MIN_CLUSTER_SIZE = [50, 100, 200]
 N_TOPICS = [100]
 N_TOP_WORDS = [15]
 METRIC = ['cosine']

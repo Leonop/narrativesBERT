@@ -13,6 +13,8 @@ import os
 from bertopic import BERTopic
 from sklearn.metrics import silhouette_score
 from sentence_transformers import SentenceTransformer
+from bertopic.representation import PartOfSpeech
+# from bertopic.vectorizers import ClassTfidfTransformer # perofrmance improvement with seed words
 from umap import UMAP
 from hdbscan import HDBSCAN
 import numpy as np
@@ -151,8 +153,8 @@ def vectorize_doc(docs):
         vocab.update(tokenizer(doc))
     vocab = [word for word, frequency in vocab.items() if frequency > 15]; 
     vocab = set([word for words in global_options.SEED_WORDS for word in words] + list(vocab))
-    
-
+    # remove word are digits only and words with length less than 3
+    vocab = [word for word in vocab if not word.isdigit() and len(word) > 2]
     vectorize_model = CountVectorizer(ngram_range=(1, 2), vocabulary=vocab, stop_words="english")
     return vectorize_model
     
