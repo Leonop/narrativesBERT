@@ -26,6 +26,7 @@ from tqdm import tqdm
 from sklearn.feature_extraction.text import CountVectorizer
 import global_options
 from itertools import product
+from visualize_topic_models import VisualizeTopics
 
 # Global Variables
 current_path = global_options.PROJECT_DIR
@@ -200,7 +201,7 @@ def evaluate_topic_model(params, docs, vectorizer_model):
     memory_usage = psutil.virtual_memory().percent
     print(f"Memory usage: {memory_usage}%")
     
-    return score, _prob
+    return score, topics, _prob, topic_model
 
 def save_csv(results, filename):
     """
@@ -219,7 +220,7 @@ def save_csv(results, filename):
 # Main function
 def main():
     # Embedding models to iterate over
-    embedding_models = ['paraphrase-MiniLM-L6-v2', 'all-MiniLM-L6-v2']
+    embedding_models = global_options.EMBEDDING_MODELS
     
     for embedding_model in embedding_models:
         # Load data
@@ -267,7 +268,7 @@ def main():
         
         # Evaluate the topic model with the current parameters
         try:
-            score, probability = evaluate_topic_model(params, docs, vectorizer_model)
+            score, topics, probability, topic_model = evaluate_topic_model(params, docs, vectorizer_model)
         except Exception as e:
             print(f"Error evaluating params: {params}, Error: {e}")
             continue
@@ -283,6 +284,11 @@ def main():
     # Save results to a CSV file
     print("Saving model selection results...")
     save_csv(results, "model_selection_results.csv")
-    
+    # visualize topic_models.py
+    vt = VisualizeTopics()
+    reduced_embeddings_2d = vt.visualize_topics()
+    _df = pd.DataFrame({"x": reduced_embeddings_2d[:, 0], "y": reduced_embeddings_2d[:, 1], "Topic": [str(t) for t in topic_model.topics_]})
+    vt.plot_and_save_figure(_df, reduced_embeddings_2d, topic_model)
+    vt.hirachical_cluster_visualization(docs, topic_model)
 if __name__ == "__main__":
     main()
