@@ -129,12 +129,12 @@ class VisualizeTopics:
         plt.xlabel("UMAP Dimension 1")
         plt.ylabel("UMAP Dimension 2")
         plt.legend(loc="best", bbox_to_anchor=(1.05, 1))
-        plt.show()
         # check the fig output folder is exist
         if not os.path.exists(self.fig_folder):
             os.makedirs(self.fig_folder)
         save_path= os.path.join(self.fig_folder, "Topic_pic1.pdf")
         plt.savefig(save_path, format='pdf', dpi=600)
+        plt.show()
         return reduced_embeddings
     
     def plot_and_save_figure(self, df, topic_model, docs):

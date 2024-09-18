@@ -215,7 +215,11 @@ def save_csv(results, filename):
     if not os.path.exists(os.path.join(current_path, "output")):
         os.makedirs(os.path.join(current_path, "output"))
     df = pd.DataFrame(results, columns=global_options.SAVE_RESULTS_COLS)
-    df.to_csv(file_path, index=False)
+    # save the results to a csv file in append mode
+    if os.path.exists(file_path):
+        df.to_csv(file_path, mode='a', header=False, index=False)
+    else:
+        df.to_csv(file_path, index=False)
     
 # Main function
 def main():
