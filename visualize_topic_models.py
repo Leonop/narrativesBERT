@@ -205,6 +205,8 @@ class VisualizeTopics:
 
         # Extract embeddings using BERTopic's internal method
         embeddings = topic_model.topic_embeddings_
+        if len(docs) == 0 or topic_model is None:
+            raise ValueError("Invalid input: docs or topic_model is empty.")
 
         # Step 3: Perform Hierarchical Agglomerative Clustering using linkage
         Z = linkage(embeddings, method='ward')
