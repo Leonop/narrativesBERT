@@ -27,6 +27,9 @@ from sklearn.feature_extraction.text import CountVectorizer
 import global_options
 from itertools import product
 from visualize_topic_models import VisualizeTopics
+# from sklearn.cluster import MiniBatchKMeans
+# from sklearn.decomposition import IncrementalPCA
+# from bertopic.vectorizers import OnlineCountVectorizer
 
 # Global Variables
 current_path = global_options.PROJECT_DIR
@@ -84,6 +87,7 @@ def load_data(file_path, nrows=NROWS, chunk_size=CHUNK_SIZE, year_filter=YEAR_FI
     docs = [str(row['componenttextpreview']) for _, row in meta.iterrows() if row["index"] != nrows]
 
     return meta, docs
+
 
 def generate_embeddings(docs, embedding_model):
     """
