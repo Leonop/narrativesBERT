@@ -1,6 +1,6 @@
 import os
 from typing import Dict, List
-
+import pandas as pd
 # MIN_CLUSTER_SIZE = 20
 # N_TOPICS = 100
 # N_TOP_WORDS = 15
@@ -12,6 +12,7 @@ data_folder = os.path.join(PROJECT_DIR, "data")
 output_folder = os.path.join(PROJECT_DIR, "output")
 output_fig_folder = os.path.join(output_folder, "fig")
 data_filename = 'earnings_calls_20231017.csv'
+stop_list = pd.read_csv(os.path.join(data_folder, "stoplist.csv"))['stopwords'].tolist()
 
 NROWS = 10000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
