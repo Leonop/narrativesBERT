@@ -19,7 +19,7 @@ DATE_COLUMN = "transcriptcreationdate_utc"
 num_topic_to_plot = 20 # top_N topics to plot
 
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-NROWS = 1000 # number of rows to read from the csv file
+NROWS = 1000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
 YEAR_FILTER = 2025 # filter the data based on the year
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
