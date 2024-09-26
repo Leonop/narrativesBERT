@@ -275,6 +275,14 @@ class BERTopicGPU(object):
         # load the doc from a txt file to a list
         with open(path, 'r') as f:
             return f.readlines()
+        
+    def plot_topic_scatter(self, topic_model, docs, num_topics):
+        # Get the embeddings and reduce them to 2D
+        embeddings = topic_model.topic_embeddings_
+        reduced_embeddings_2d = self.umap_model.fit_transform(embeddings)
+        visual_df = pd.DataFrame({"x": reduced_embeddings_2d[:, 0], "y": reduced_embeddings_2d[:, 1], "Topic": [str(t) for t in topic_model.topics_]})
+        # Plot the topics
+        vt.plot_and_save_figure(visual_df, topic_model, docs)
             
 
 if __name__ == "__main__":
