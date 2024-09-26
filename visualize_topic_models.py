@@ -12,7 +12,7 @@ from umap import UMAP
 from bertopic import BERTopic
 # from model_selection_hpc import *
 import os
-import global_options
+import global_options as gl
 import seaborn as sns
 from matplotlib import pyplot as plt
 from adjustText import adjust_text
@@ -26,11 +26,11 @@ import itertools
 
 class VisualizeTopics:
     def __init__(self):
-        self.data_path = os.path.join(global_options.data_folder, global_options.data_filename)
-        self.nrows = global_options.NROWS
-        self.chunk_size = global_options.CHUNK_SIZE
-        self.year_filter = global_options.YEAR_FILTER
-        self.fig_folder = global_options.output_fig_folder
+        self.data_path = os.path.join(gl.data_folder, gl.data_filename)
+        self.nrows = gl.NROWS
+        self.chunk_size = gl.CHUNK_SIZE
+        self.year_filter = gl.YEAR_FILTER
+        self.fig_folder = gl.output_fig_folder
 
     def load_data(self):
         """
@@ -89,7 +89,7 @@ class VisualizeTopics:
         np.ndarray: Array of document embeddings.
         """
         # current_path = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(global_options.PROJECT_DIR, "model", f"embeddings_{re.sub('/', '_', str(global_options.EMBEDDING_MODELS[0]))}.npy")
+        file_path = os.path.join(gl.PROJECT_DIR, "model", f"embeddings_{re.sub('/', '_', str(gl.EMBEDDING_MODELS[0]))}.npy")
         # Check if the file exists before trying to open it
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Embedding file not found at: {file_path}")
@@ -111,7 +111,7 @@ class VisualizeTopics:
         # load embeddings
         embeddings = self.load_embeddings()
         # Use UMAP to reduce the dimensionality of the embeddings to 2D
-        umap_model = UMAP(n_neighbors=global_options.N_NEIGHBORS[0], n_components=global_options.N_COMPONENTS[0], min_dist=global_options.MIN_DIST[0], metric=global_options.METRIC[0], random_state=42)
+        umap_model = UMAP(n_neighbors=gl.N_NEIGHBORS[0], n_components=gl.N_COMPONENTS[0], min_dist=gl.MIN_DIST[0], metric=gl.METRIC[0], random_state=42)
         reduced_embeddings = umap_model.fit_transform(embeddings)
 
         # Prepare a color map for different topics
@@ -187,7 +187,7 @@ class VisualizeTopics:
         # check the fig output folder is exist
         if not os.path.exists(self.fig_folder):
             os.makedirs(self.fig_folder)
-        save_path= os.path.join(self.fig_folder, "Topic_pic2.pdf")
+        save_path= os.path.join(self.fig_folder, gl.TOPIC_SCATTER_PLOT)
         # Save the plot as a PDF
         plt.savefig(save_path, format='pdf', dpi=600)
         plt.show()
@@ -227,9 +227,9 @@ class VisualizeTopics:
         plt.xlabel("Distance")
         plt.ylabel("Topics")
         plt.grid(False)  # Disable grid for a clean look
-        if not os.path.exists(global_options.output_fig_folder):
-            os.makedirs(global_options.output_fig_folder)
-        plt.savefig(os.path.join(global_options.output_fig_folder, "visualization_hierarchical_topics.pdf"), format='pdf', dpi=600)
+        if not os.path.exists(gl.output_fig_folder):
+            os.makedirs(gl.output_fig_folder)
+        plt.savefig(os.path.join(gl.output_fig_folder, "visualization_hierarchical_topics.pdf"), format='pdf', dpi=600)
         plt.show()
                 
 # if __name__ == "__main__":

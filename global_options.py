@@ -16,10 +16,11 @@ data_filename = 'earnings_calls_20231017.csv'
 stop_list = pd.read_csv(os.path.join(data_folder, "stoplist.csv"))['stopwords'].tolist()
 MODEL_SCORES = os.path.join(output_folder, "model_scores.txt")
 DATE_COLUMN = "transcriptcreationdate_utc"
+TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
 
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-NROWS = 1000000 # number of rows to read from the csv file
+NROWS = 10000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
 YEAR_FILTER = 2025 # filter the data based on the year
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
