@@ -42,7 +42,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import silhouette_score
 from gensim.models.coherencemodel import CoherenceModel
 from gensim.corpora.dictionary import Dictionary
-
+from visualize_topic_models import VisualizeTopics as vt
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
@@ -214,7 +214,10 @@ class BERTopicGPU(object):
             # Evaluate the model on the test set (using the precomputed embeddings for the test set)
             test_embeddings = self.embedding_model.encode(test_docs, show_progress_bar=True, device=device)
             topics, _ = topic_model.transform(test_docs)
-            
+            topic_info = topic_model.get_topic_info()
+            # save the topic information to csv file
+            TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_info_{fold}.csv")
+            topic_info.to_csv(TOPIC_INFO_path, index=False)
             # Use silhouette score to evaluate the quality of the clusters for this fold
             sscore = silhouette_score(test_embeddings, topics)
             cscore = self.compute_coherence_score(topic_model, train_docs)
@@ -225,6 +228,7 @@ class BERTopicGPU(object):
         avg_score = np.mean(fold_scores)
         print(f"\nAverage Silhouette Score across {n_splits} folds: {avg_score}")
             # Compute the average silhouette score and coherence score across all folds
+        
         avg_sscore = np.mean([score[0] for score in fold_scores])
         avg_cscore = np.mean([score[1] for score in fold_scores])
         self.save_results(topic_model, n_cluster)
@@ -242,7 +246,7 @@ class BERTopicGPU(object):
     def save_model_scores(self, fold_num, n_cluster, score, cscore):
         # Save the average silhouette score
         score_path = os.path.join(gl.MODEL_SCORES)
-        with open(score_path, 'w') as f:
+        with open(score_path, 'a') as f:
             f.write(f"{fold_num}, {n_cluster}, {score}, {cscore}\n")
         print(f"Average silhouette score saved to {score_path}")
         
@@ -258,12 +262,35 @@ class BERTopicGPU(object):
         fig3 = topic_model.visualize_hierarchy()
         fig3.write_image(visualization_path.replace('.pdf', '_hierarchy.pdf'))
         print(f"Visualization saved to {visualization_path}")
+        
+    def save_file(self, data, path, bar_length=100):
+        #write the doc to a txt file
+        with open(path, 'w') as f:
+            with tqdm(total=len(data), desc="Saving data", bar_format="{l_bar}{bar} [time left: {remaining}]", ncols=bar_length, colour="green") as pbar:
+                for item in data:
+                    f.write("%s\n" % item)
+                    pbar.update(1)
+                    
+    def load_doc(self, path):
+        # load the doc from a txt file to a list
+        with open(path, 'r') as f:
+            return f.readlines()
+            
 
 if __name__ == "__main__":
     bt = BERTopicGPU()
     meta = bt.load_data()
-    docs = bt.pre_process_text(meta)
+    docs_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
+    # if the processed doc file is exist, please load it
+    if os.path.exists(docs_path):
+        docs = bt.load_doc(docs_path)
+    else:
+        docs = bt.pre_process_text(meta)
+        # save docs to a file
+        bt.save_file(docs, docs_path, bar_length=100)
     topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     bt.save_figures(topic_model)
+    # plot the topics
+    vt.plot_and_save_figure(topic_model, docs, gl.num_topic_to_plot)
     print("BERTopic model training completed.")
     
