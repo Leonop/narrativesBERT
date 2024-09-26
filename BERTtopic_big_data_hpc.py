@@ -214,7 +214,10 @@ class BERTopicGPU(object):
             # Evaluate the model on the test set (using the precomputed embeddings for the test set)
             test_embeddings = self.embedding_model.encode(test_docs, show_progress_bar=True, device=device)
             topics, _ = topic_model.transform(test_docs)
-            
+            topic_info = topic_model.get_topic_info()
+            # save the topic information to csv file
+            TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_info_{fold}.csv")
+            topic_info.to_csv(TOPIC_INFO_path, index=False)
             # Use silhouette score to evaluate the quality of the clusters for this fold
             sscore = silhouette_score(test_embeddings, topics)
             cscore = self.compute_coherence_score(topic_model, train_docs)
@@ -242,7 +245,7 @@ class BERTopicGPU(object):
     def save_model_scores(self, fold_num, n_cluster, score, cscore):
         # Save the average silhouette score
         score_path = os.path.join(gl.MODEL_SCORES)
-        with open(score_path, 'w') as f:
+        with open(score_path, 'a') as f:
             f.write(f"{fold_num}, {n_cluster}, {score}, {cscore}\n")
         print(f"Average silhouette score saved to {score_path}")
         
@@ -259,11 +262,35 @@ class BERTopicGPU(object):
         fig3.write_image(visualization_path.replace('.pdf', '_hierarchy.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
+    def save_file(self, data, path, bar_length = 100):
+        # write the doc to a txt file
+        with tqdm(total=len(data), desc="Saving data", bar_format="{l_bar}{bar} [time left: {remaining}]", ncols=bar_length, colour="green") as pbar:
+            with open(path, 'w') as f:
+                for item in data:
+                    # Perform your save operation, e.g., writing to a file
+                    f.write(f"{item}\n")
+                    pbar.update(1)
+
+    
+    def load_file(self, path):
+        # load the doc from a text file to a list
+        with open(path, 'r') as f:
+            return f.readlines()
+        
 if __name__ == "__main__":
     bt = BERTopicGPU()
     meta = bt.load_data()
-    docs = bt.pre_process_text(meta)
+    doc_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
+    # if the processed doc file is exist, please load it
+    if os.path.exists(doc_path):
+        docs = bt.load_file(doc_path)
+        prin("Skipping the preprocessing!")
+    else:
+        docs = bt.pre_process_text(meta)
+        # save pre_process_text to local file
+        bt.save_file(docs, doc_path, bar_length = 100)    
     topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     bt.save_figures(topic_model)
     print("BERTopic model training completed.")
     
+
