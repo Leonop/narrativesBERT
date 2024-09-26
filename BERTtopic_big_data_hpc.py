@@ -43,6 +43,8 @@ from sklearn.metrics import silhouette_score
 from gensim.models.coherencemodel import CoherenceModel
 from gensim.corpora.dictionary import Dictionary
 from visualize_topic_models import VisualizeTopics as vt
+import itertools
+from matplotlib import pyplot as plt
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
@@ -63,6 +65,8 @@ class BERTopicGPU(object):
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
         # Clustering with MiniBatchKMeans
         self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     def load_data(self):
         # Check if the file exists
         if not os.path.exists(file_path):
@@ -138,10 +142,10 @@ class BERTopicGPU(object):
         return coherence_score
 
     # Helper function for processing batches
-    def process_batch_gpu(self, i, batch_size, docs, embedding_model, device, N_):
+    def process_batch_gpu(self, i, batch_size, docs, embedding_model, N_):
         i_end = min(i + batch_size, N_)
         batch = docs[i:i_end]
-        batch_embed = embedding_model.encode(batch, device=device)
+        batch_embed = embedding_model.encode(batch, device= self.device)
         return batch_embed, i, i_end
 
     def train_on_fold(self, train_docs, embeddings, vectorizer_model):
@@ -178,8 +182,7 @@ class BERTopicGPU(object):
     # Main function with cross-validation
     def train_bert_topic_model_cv(self, docs, n_splits=10):
         # Check if a GPU is available
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print(f"Using device: {device}")
+        print(f"Using device: {self.device}")
 
         # Number of documents
         N_ = len(docs)
@@ -202,7 +205,7 @@ class BERTopicGPU(object):
             embeddings = np.zeros((len(train_docs), embedding_dim))
             batch_size = gl.BATCH_SIZE
             for i in tqdm(range(0, len(train_docs), batch_size), colour="Blue"):
-                batch_embed, i, i_end = self.process_batch_gpu(i, batch_size, train_docs, self.embedding_model, device, len(train_docs))
+                batch_embed, i, i_end = self.process_batch_gpu(i, batch_size, train_docs, self.embedding_model, len(train_docs))
                 embeddings[i:i_end, :] = batch_embed
 
             # Ensure `vocab` is a CountVectorizer object
@@ -212,7 +215,7 @@ class BERTopicGPU(object):
             print(f"Type of topic_model after training: {type(topic_model)}")  # Should output <class 'bertopic.BERTopic'>
 
             # Evaluate the model on the test set (using the precomputed embeddings for the test set)
-            test_embeddings = self.embedding_model.encode(test_docs, show_progress_bar=True, device=device)
+            test_embeddings = self.embedding_model.encode(test_docs, show_progress_bar=True, device=self.device)
             topics, _ = topic_model.transform(test_docs)
             topic_info = topic_model.get_topic_info()
             # save the topic information to csv file
@@ -276,14 +279,56 @@ class BERTopicGPU(object):
         with open(path, 'r') as f:
             return f.readlines()
         
-    def plot_topic_scatter(self, topic_model, docs, num_topics):
+    def plot_doc_embedding(self, docs):
         # Get the embeddings and reduce them to 2D
-        embeddings = topic_model.topic_embeddings_
-        reduced_embeddings_2d = self.umap_model.fit_transform(embeddings)
-        visual_df = pd.DataFrame({"x": reduced_embeddings_2d[:, 0], "y": reduced_embeddings_2d[:, 1], "Topic": [str(t) for t in topic_model.topics_]})
-        # Plot the topics
-        vt.plot_and_save_figure(visual_df, topic_model, docs)
-            
+        document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
+        reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
+        vectorizer_model = vectorize_doc(docs)
+        topic_model = self.train_on_fold(docs, self.embeddings, vectorizer_model)
+      # Get the embeddings and reduce them to 2D
+        document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
+        reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
+
+        # Ensure that reduced embeddings, topics, and docs have the same length
+        if len(reduced_embeddings_2d) != len(docs) or len(topic_model.topics_) != len(docs):
+            raise ValueError("Mismatch between the number of embeddings, documents, and topics")
+
+        # Proceed to create the DataFrame if everything matches
+        visual_df = pd.DataFrame({
+            "x": reduced_embeddings_2d[:, 0],
+            "y": reduced_embeddings_2d[:, 1],
+            "Topic": topic_model.topics_  # Add topics to the dataframe
+        })
+        
+        # Assigning colors to topics
+        colors = itertools.cycle(['#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#e41a1c', '#ffff33', '#a65628', 
+                                '#f781bf', '#999999', '#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', 
+                                '#ffd92f', '#e5c494', '#b3b3b3', '#1f78b4', '#33a02c', '#fb9a99'])
+
+        color_key = {str(topic): next(colors) for topic in set(topic_model.topics_) if topic != -1}
+        
+        # Map colors to the DataFrame based on topic
+        visual_df["color"] = visual_df["Topic"].map(lambda x: color_key.get(str(x), '#999999'))  # Default color if topic not found
+
+        # Create a scatter plot
+        plt.figure(figsize=(16, 16))
+        
+        # Scatter plot of the documents with the assigned colors
+        plt.scatter(visual_df["x"], visual_df["y"], c=visual_df["color"], alpha=0.4, s=1)  # alpha for transparency, s for small point size
+
+        # Title for the plot
+        plt.title("Article-level Nearest Neighbor Embedding", fontsize=16)
+        
+        # Remove the axis labels for a cleaner look
+        plt.axis("off")
+
+        # Show the plot
+        plt.show()
+
+        # Optionally, save the plot as a high-resolution PNG file
+        save_path = os.path.join(self.fig_folder, "article_level_embedding_plot.png")
+        plt.savefig(save_path, format="png", dpi=600)
+                    
 
 if __name__ == "__main__":
     bt = BERTopicGPU()
@@ -298,7 +343,7 @@ if __name__ == "__main__":
         bt.save_file(docs, docs_path, bar_length=100)
     topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     bt.save_figures(topic_model)
+    bt.plot_doc_embedding(topic_model, docs)
     # plot the topics
-    vt.plot_and_save_figure(topic_model, docs, gl.num_topic_to_plot)
     print("BERTopic model training completed.")
     
