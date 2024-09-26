@@ -284,7 +284,7 @@ if __name__ == "__main__":
     # if the processed doc file is exist, please load it
     if os.path.exists(doc_path):
         docs = bt.load_file(doc_path)
-        prin("Skipping the preprocessing!")
+        print("Skipping the preprocessing!")
     else:
         docs = bt.pre_process_text(meta)
         # save pre_process_text to local file
