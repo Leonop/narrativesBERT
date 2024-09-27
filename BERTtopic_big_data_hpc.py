@@ -284,11 +284,7 @@ class BERTopicGPU(object):
         document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
         reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
         vectorizer_model = vectorize_doc(docs)
-        topic_model = self.train_on_fold(docs, self.embeddings, vectorizer_model)
-      # Get the embeddings and reduce them to 2D
-        document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
-        reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
-
+        topic_model = self.train_on_fold(docs, document_embeddings, vectorizer_model)
         # Ensure that reduced embeddings, topics, and docs have the same length
         if len(reduced_embeddings_2d) != len(docs) or len(topic_model.topics_) != len(docs):
             raise ValueError("Mismatch between the number of embeddings, documents, and topics")
@@ -321,13 +317,11 @@ class BERTopicGPU(object):
         
         # Remove the axis labels for a cleaner look
         plt.axis("off")
-
+        # Optionally, save the plot as a high-resolution PNG file
+        save_path = os.path.join(gl.output_fig_folder, "article_level_embedding_plot.pdf")
+        plt.savefig(save_path, format="pdf", dpi=600)
         # Show the plot
         plt.show()
-
-        # Optionally, save the plot as a high-resolution PNG file
-        save_path = os.path.join(self.fig_folder, "article_level_embedding_plot.png")
-        plt.savefig(save_path, format="png", dpi=600)
                     
 
 if __name__ == "__main__":
@@ -343,7 +337,7 @@ if __name__ == "__main__":
         bt.save_file(docs, docs_path, bar_length=100)
     topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     bt.save_figures(topic_model)
-    bt.plot_doc_embedding(topic_model, docs)
+    bt.plot_doc_embedding(docs)
     # plot the topics
     print("BERTopic model training completed.")
     
