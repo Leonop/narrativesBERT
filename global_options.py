@@ -18,7 +18,7 @@ MODEL_SCORES = os.path.join(output_folder, "model_scores.txt")
 DATE_COLUMN = "transcriptcreationdate_utc"
 TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
-
+MODEL_SELECTION_RESULTS = os.path.join(output_folder, "model_selection_results.csv")
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
 NROWS = 10000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time

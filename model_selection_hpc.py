@@ -24,7 +24,7 @@ import re
 import collections
 from tqdm import tqdm
 from sklearn.feature_extraction.text import CountVectorizer
-import global_options
+import global_options as gl
 from itertools import product
 from visualize_topic_models import VisualizeTopics
 # from sklearn.cluster import MiniBatchKMeans
@@ -32,11 +32,11 @@ from visualize_topic_models import VisualizeTopics
 # from bertopic.vectorizers import OnlineCountVectorizer
 
 # Global Variables
-current_path = global_options.PROJECT_DIR
-data_path = os.path.join(global_options.data_folder, global_options.data_filename)
-NROWS = global_options.NROWS # number of rows to read from the csv file
-CHUNK_SIZE = global_options.CHUNK_SIZE # number of rows to read at a time
-YEAR_FILTER = global_options.YEAR_FILTER # filter the data based on the year
+current_path = gl.PROJECT_DIR
+data_path = os.path.join(gl.data_folder, gl.data_filename)
+NROWS = gl.NROWS # number of rows to read from the csv file
+CHUNK_SIZE = gl.CHUNK_SIZE # number of rows to read at a time
+YEAR_FILTER = gl.YEAR_FILTER # filter the data based on the year
 
 # how to import seedwords from global_variables.py
 # from global_variables import seedwords
@@ -157,7 +157,7 @@ def vectorize_doc(docs):
     for doc in tqdm(docs, total=len(docs)):
         vocab.update(tokenizer(doc))
     vocab = [word for word, frequency in vocab.items() if frequency > 15]; 
-    vocab = set([word for words in global_options.SEED_WORDS for word in words] + list(vocab))
+    vocab = set([word for words in gl.SEED_WORDS for word in words] + list(vocab))
     # remove word are digits only and words with length less than 3
     vocab = [word for word in vocab if not word.isdigit() and len(word) > 2]
     vectorize_model = CountVectorizer(ngram_range=(1, 2), vocabulary=vocab, stop_words="english")
@@ -218,7 +218,7 @@ def save_csv(results, filename):
     file_path = os.path.join(current_path, "output", filename)
     if not os.path.exists(os.path.join(current_path, "output")):
         os.makedirs(os.path.join(current_path, "output"))
-    df = pd.DataFrame(results, columns=global_options.SAVE_RESULTS_COLS)
+    df = pd.DataFrame(results, columns=gl.SAVE_RESULTS_COLS)
     # save the results to a csv file in append mode
     if os.path.exists(file_path):
         df.to_csv(file_path, mode='a', header=False, index=False)
@@ -228,13 +228,13 @@ def save_csv(results, filename):
 # Main function
 def main():
     # Embedding models to iterate over
-    embedding_models = global_options.EMBEDDING_MODELS
+    embedding_models = gl.EMBEDDING_MODELS
     
     for embedding_model in embedding_models:
         # Load data
         print(f"Loading data for embedding model: {embedding_model}")
-        meta, docs = load_data(data_path, nrows=global_options.NROWS, 
-                               chunk_size=global_options.CHUNK_SIZE, year_filter=global_options.YEAR_FILTER)
+        meta, docs = load_data(data_path, nrows=gl.NROWS, 
+                               chunk_size=gl.CHUNK_SIZE, year_filter=gl.YEAR_FILTER)
 
         # Generate embeddings
         print(f"Generating embeddings for {embedding_model}")
@@ -246,13 +246,13 @@ def main():
 
     # Define parameter grid for optimization
     param_grid = {
-        'n_neighbors': global_options.N_NEIGHBORS,
-        'n_components': global_options.N_COMPONENTS,
-        'min_dist': global_options.MIN_DIST,
-        'metric': global_options.METRIC,
-        'min_samples': global_options.MIN_SAMPLES,
-        'min_cluster_size': global_options.MIN_CLUSTER_SIZE,
-        'embedding_model': global_options.EMBEDDING_MODELS  # List of embedding models
+        'n_neighbors': gl.N_NEIGHBORS,
+        'n_components': gl.N_COMPONENTS,
+        'min_dist': gl.MIN_DIST,
+        'metric': gl.METRIC,
+        'min_samples': gl.MIN_SAMPLES,
+        'min_cluster_size': gl.MIN_CLUSTER_SIZE,
+        'embedding_model': gl.EMBEDDING_MODELS  # List of embedding models
     }
     # Vectorize the documents
     print("Vectorizing documents...")

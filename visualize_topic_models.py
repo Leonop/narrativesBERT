@@ -137,20 +137,24 @@ class VisualizeTopics:
         plt.show()
         return reduced_embeddings
     
+    # Updated function
     def plot_and_save_figure(self, df, topic_model, docs):
         """
-        Function to plot and save a figure as a PDF.
+        Function to plot and save a figure as a PDF for academic publication.
         
         Parameters:
         df (pd.DataFrame): Dataframe containing x, y coordinates, Topic, Length, and color columns.
-        mean_df (pd.DataFrame): Dataframe containing Topic and x, y coordinates for annotation.
         topic_model (BERTopic): BERTopic model to get the topic words.
-        color_key (dict): Dictionary mapping topics to colors.
-        save_path (str): Path to save the figure as a PDF.
         """
-        colors = itertools.cycle(['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff', '#000000'])
+        
+        # Adjusted muted color palette suitable for academic journals
+        colors = itertools.cycle(['#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#e41a1c', '#ffff33', '#a65628', 
+                                '#f781bf', '#999999', '#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', 
+                                '#ffd92f', '#e5c494', '#b3b3b3', '#1f78b4', '#33a02c', '#fb9a99'])
+
         color_key = {str(topic): next(colors) for topic in set(topic_model.topics_) if topic != -1}
-        # Prepare dataframe and ignore outliers
+
+        # Prepare dataframe and filter out outliers or undesired points
         df["Length"] = [len(doc) for doc in docs]
         df = df.loc[df.Topic != "-1"]
         df = df.loc[(df.y > -10) & (df.y < 10) & (df.x < 10) & (df.x > -10), :]
@@ -160,76 +164,45 @@ class VisualizeTopics:
         mean_df = df.groupby("Topic").mean().reset_index()
         mean_df.Topic = mean_df.Topic.astype(int)
         mean_df = mean_df.sort_values("Topic")
+
+        # Start figure
         fig, ax = plt.subplots(figsize=(16, 16))
-        
+
         # Convert 'Topic' to string to ensure proper mapping
         df['Topic'] = df['Topic'].astype(str)
         df['color'] = df['Topic'].map(color_key)
         
-        # Scatterplot
-        sns.scatterplot(data=df, x='x', y='y', ax=ax, hue='color', alpha=0.4, s=10, sizes=(0.4, 10), size="Length", legend=False)
+        # Scatterplot with adjustments for transparency and small marker size
+        sns.scatterplot(data=df, x='x', y='y', ax=ax, hue='color', palette=color_key, 
+                        alpha=0.1, s=5, legend=False)  # s=5 for small markers, alpha=0.1 for more transparency
         
-        # Annotate top 50 topics
+        # Optionally, add KDE for a smoother, color-blended look similar to the image provided
+        sns.kdeplot(data=df, x='x', y='y', ax=ax, fill=True, thresh=0, levels=100, color="k", alpha=0.1)
+
+        # Annotate top topics
         texts, xs, ys = [], [], []
         for _, row in mean_df.iterrows():
             topic = row["Topic"]
             name = " - ".join(list(zip(*topic_model.get_topic(int(topic))))[0][:3])
 
-            if int(topic) <= 50:
+            if int(topic) <= 50:  # Annotating top 50 topics
                 xs.append(row["x"])
                 ys.append(row["y"])
-                texts.append(plt.text(row["x"], row["y"], name, size=10, ha="center", color=color_key[str(int(topic))],
+                texts.append(plt.text(row["x"], row["y"], name, size=10, ha="center", 
+                                    color=color_key[str(int(topic))],
                                     path_effects=[pe.withStroke(linewidth=0.5, foreground="black")]))
-        
-        # Adjust annotations such that they do not overlap
-        adjust_text(texts, x=xs, y=ys, time_lim=1, force_text=(0.01, 0.02), force_static=(0.01, 0.02), force_pull=(0.5, 0.5))
-        
-        # check the fig output folder is exist
+
+        # Adjust annotations to avoid overlapping
+        adjust_text(texts, x=xs, y=ys, time_lim=1, 
+                    force_text=(0.01, 0.02), force_static=(0.01, 0.02), force_pull=(0.5, 0.5))
+
+        # Check if the output folder exists, create if not
         if not os.path.exists(self.fig_folder):
             os.makedirs(self.fig_folder)
-        save_path= os.path.join(self.fig_folder, gl.TOPIC_SCATTER_PLOT)
-        # Save the plot as a PDF
+        
+        # Define the save path and save as a high-resolution PDF
+        save_path = os.path.join(self.fig_folder, gl.TOPIC_SCATTER_PLOT)
         plt.savefig(save_path, format='pdf', dpi=600)
-        plt.show()
-        
-        
-    def hirachical_cluster_visualization(self, docs, topic_model):
-        """
-        Function to visualize the hierarchical clustering of the topics.
-        
-        Parameters:
-        data (pd.DataFrame): Dataframe containing the data.
-        docs (List[str]): List of documents.
-        topic_model (BERTopic): BERTopic model.
-        """
-
-        # Extract embeddings using BERTopic's internal method
-        embeddings = topic_model.topic_embeddings_
-        if len(docs) == 0 or topic_model is None:
-            raise ValueError("Invalid input: docs or topic_model is empty.")
-
-        # Step 3: Perform Hierarchical Agglomerative Clustering using linkage
-        Z = linkage(embeddings, method='ward')
-        fig, ax = plt.subplots(figsize=(8, 16))  # Adjust size as needed
-
-        # Customize the dendrogram
-        dendro = dendrogram(
-            Z,
-            orientation='left',  # To get the layout similar to your provided image
-            labels=[f'Topic {i}' for i in range(len(embeddings))],  # Adjust labels accordingly
-            leaf_font_size=3,  # Adjust label size
-            color_threshold=0.7 * np.max(Z[:, 2]),  # Set color threshold
-        )
-        # Adjust spacing around the figure for better clarity
-        plt.subplots_adjust(left=0.35, right=0.95, top=0.95, bottom=0.05)  # Adjust for better text spacing
-
-        plt.title("Hierarchical Clustering Dendrogram")
-        plt.xlabel("Distance")
-        plt.ylabel("Topics")
-        plt.grid(False)  # Disable grid for a clean look
-        if not os.path.exists(gl.output_fig_folder):
-            os.makedirs(gl.output_fig_folder)
-        plt.savefig(os.path.join(gl.output_fig_folder, "visualization_hierarchical_topics.pdf"), format='pdf', dpi=600)
         plt.show()
                 
 # if __name__ == "__main__":

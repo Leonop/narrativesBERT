@@ -35,7 +35,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from cuml.manifold import UMAP
 from cuml.cluster import HDBSCAN
 from bertopic import BERTopic
-from sklearn.cluster import MiniBatchKMeans
+from sklearn.cluster import KMeans  #GPU-accelerated version KMeans
 from model_selection_hpc import vectorize_doc
 import torch
 from sklearn.model_selection import KFold
@@ -45,6 +45,7 @@ from gensim.corpora.dictionary import Dictionary
 from visualize_topic_models import VisualizeTopics as vt
 import itertools
 from matplotlib import pyplot as plt
+import cupy as cp
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
@@ -278,7 +279,36 @@ class BERTopicGPU(object):
         # load the doc from a txt file to a list
         with open(path, 'r') as f:
             return f.readlines()
+    
+    def train_bertopic(self, train_docs, embeddings, vectorizer_model, cluster_model):
+        # Ensure embeddings do not have NaN or Inf
+        embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=0.0, neginf=0.0)
         
+        # Check if the shape of embeddings matches the number of documents
+        if len(train_docs) != embeddings.shape[0]:
+            raise ValueError(f"Number of training docs ({len(train_docs)}) does not match embedding shape ({embeddings.shape[0]}).")
+        
+        print(f"Embeddings shape: {embeddings.shape}")
+        print(f"Number of training documents: {len(train_docs)}")
+
+        # Fit BERTopic with precomputed embeddings and models
+        topic_model = BERTopic(
+            embedding_model=self.embedding_model,
+            umap_model=self.umap_model,
+            hdbscan_model = cluster_model,  # You are using KMeans here, not HDBSCAN, which is fine
+            vectorizer_model=vectorizer_model,
+            calculate_probabilities=True,
+            verbose=True
+        )
+        try:
+            # Fit the model and check for any issues
+            topic_model.fit(train_docs, embeddings=embeddings)
+        except ValueError as e:
+            print(f"Error during BERTopic fitting: {e}")
+            raise
+
+        return topic_model
+    
     def plot_doc_embedding(self, docs):
         # Get the embeddings and reduce them to 2D
         document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
@@ -322,7 +352,102 @@ class BERTopicGPU(object):
         plt.savefig(save_path, format="pdf", dpi=600)
         # Show the plot
         plt.show()
-                    
+        
+    def model_selection(self, docs_path):
+        if os.path.exists(docs_path):
+            docs = bt.load_doc(docs_path)
+        # Initialize embedding model on GPU
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2', device='cuda')
+        
+        results = pd.DataFrame(columns=["Number of Topics", "Silhouette Score", "Coherence Score"])
+        for num_topics in tqdm(range(10, 200, 10), desc="Training BERTopic models", colour="green", ncols=100):
+            cluster_model = KMeans(n_clusters=num_topics, random_state=0)
+            document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
+            # convert the document embeddings to cupy for cuML
+            document_embeddings_gpu = cp.array(document_embeddings)
+            
+            # vectorize documents (assuming this function is compatible with GPU data)
+            vectorizer_model = vectorize_doc(docs)
+            
+            # Initialize BERTopic with the GPU embeddings and cluster model
+            topic_model = BERTopic(embedding_model=self.embedding_model, 
+                                vectorizer_model=vectorizer_model, 
+                                umap_model=None,  # Disable UMAP if already handled
+                                hdbscan_model=None,  # Disable HDBSCAN if replacing with cuML KMeans
+                                nr_topics=num_topics,
+                                verbose=True)            
+
+            # Train BERTopic
+            MS_topic_models = topic_model.fit(docs, embeddings=document_embeddings_gpu)
+            
+            # Get topic information and save
+            topic_info = MS_topic_models.get_topic_info()
+            # save the topic information to csv file
+            TOPIC_INFO_path = os.path.join(gl.output_folder, f"MS_{num_topics}.csv")
+            topic_info.to_csv(TOPIC_INFO_path, index=False)
+            
+            # save the topic model to a file
+            MS_model_path = os.path.join(gl.model_folder, f'MS_bertopic_model_{num_topics}')
+            MS_topic_models.save(MS_model_path)
+            # compute coherence score
+            cscore = self.compute_coherence_score(MS_topic_models, docs)
+            
+            # get silhouette score (requires CPU)
+            topics, _ = MS_topic_models.transform(docs)
+            # Transfer embeddings back to CPU
+            document_embeddings_cpu = cp.asnumpy(document_embeddings_gpu)
+            sscore = silhouette_score(document_embeddings_cpu, topics)
+            
+            # struture the output in dictionary, with three columns, number of topics, silhouette score, and coherence score
+            # write the results to a csv file in append mode
+            row = {"Number of Topics": num_topics, "Silhouette Score": sscore, "Coherence Score": cscore}
+            row_df = pd.DataFrame([row])
+            print(row_df)
+            
+            # check if the file exists
+            if not os.path.exists(gl.MODEL_SELECTION_RESULTS):
+                row_df.to_csv(gl.MODEL_SELECTION_RESULTS, index=False)
+            else:
+                row_df.to_csv(gl.MODEL_SELECTION_RESULTS, mode='a', header=False, index=False)
+            results = results.append(row_df, ignore_index=True)
+        return results
+    
+    def plot_model_selection(self, df):
+        """
+        Function to plot model selection data with two curves: 
+        Silhouette Score and Coherence Score.
+        
+        Parameters:
+        df (pd.DataFrame): Dataframe containing 'Number of Topics', 'Silhouette Score', and 'Coherence Score'
+        """
+        plt.figure(figsize=(8, 6))
+
+        # Plot Cross-Validation (Silhouette Score) in blue
+        plt.plot(df['Number of Topics'], df['Silhouette Score'], label='Cross-Validation', color='blue')
+
+        # Plot Bayes-Factor (Coherence Score) in red
+        plt.plot(df['Number of Topics'], df['Coherence Score'], label='Bayes-Factor', color='red')
+
+        # Highlight the maximum point of Cross-Validation (Silhouette Score)
+        max_silhouette_idx = df['Silhouette Score'].idxmax()
+        plt.scatter(df['Number of Topics'].iloc[max_silhouette_idx], df['Silhouette Score'].iloc[max_silhouette_idx], 
+                    color='red', s=100, label='Max Silhouette', marker='^')
+
+        # Adding labels and title
+        plt.title("Model Selection", fontsize=16, fontweight='bold')
+        plt.xlabel("Number of Topics (K)", fontsize=12)
+        plt.ylabel("Score", fontsize=12)
+
+        # Adding grid and legend
+        plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.6)
+        plt.legend(loc='best')
+
+        # save it to output fig folder as pdf file
+        save_path = os.path.join(gl.output_fig_folder, "model_selection_plot.pdf")  
+        plt.savefig(save_path, format="pdf", dpi=600)
+        # Show the plot
+        plt.tight_layout()
+        plt.show()
 
 if __name__ == "__main__":
     bt = BERTopicGPU()
@@ -335,9 +460,11 @@ if __name__ == "__main__":
         docs = bt.pre_process_text(meta)
         # save docs to a file
         bt.save_file(docs, docs_path, bar_length=100)
-    topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
-    bt.save_figures(topic_model)
-    bt.plot_doc_embedding(docs)
-    # plot the topics
+    # topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
+    # bt.save_figures(topic_model)
+    # bt.plot_doc_embedding(docs)
+    # MODEL SELECTION, IF IT TAKES TOO LONG, PLEASE COMMENT OUT THE FOLLOWING TWO LINES
+    results = bt.model_selection(docs_path)
+    bt.plot_model_selection(results)
     print("BERTopic model training completed.")
     
