@@ -35,7 +35,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from cuml.manifold import UMAP
 from cuml.cluster import HDBSCAN
 from bertopic import BERTopic
-from sklearn.cluster import KMeans  #GPU-accelerated version KMeans
+from sklearn.cluster import MiniBatchKMeans  #GPU-accelerated version KMeans
 from model_selection_hpc import vectorize_doc
 import torch
 from sklearn.model_selection import KFold
@@ -61,7 +61,7 @@ tqdm.pandas()
 class BERTopicGPU(object):
     def __init__(self):
         # Initialize the embedding model
-        self.embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cuda')
+        self.embedding_model = SentenceTransformer(gl.EMBEDDING_MODELS[0], device='cuda')
         # Dimensionality Reduction with UMAP (GPU version from cuML)
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
         # Clustering with MiniBatchKMeans
@@ -371,9 +371,9 @@ class BERTopicGPU(object):
             
             # Initialize BERTopic with the GPU embeddings and cluster model
             topic_model = BERTopic(embedding_model=self.embedding_model, 
-                                vectorizer_model=vectorizer_model, 
+                                vectorizer_model=vectorizer_model,
+                                hdbscan_model = cluster_model,  # You are using KMeans here, not HDBSCAN, which is fine 
                                 umap_model=None,  # Disable UMAP if already handled
-                                hdbscan_model=None,  # Disable HDBSCAN if replacing with cuML KMeans
                                 nr_topics=num_topics,
                                 verbose=True)            
 

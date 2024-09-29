@@ -94,7 +94,7 @@ SEED_WORDS : Dict[str, List[str]] = {
     "Debt-to-equity ratio": ["leverage ratio", "capital structure", "financial leverage", "gearing ratio", "debt-to-capital ratio"],
     "Share buyback plans": ["stock repurchase program", "share repurchases", "buyback initiative", "stock retirement", "equity reduction"],
     "Dividend policy": ["payout policy", "shareholder distributions", "dividend strategy", "income distribution plan", "yield policy"],
-    "Capital expenditure plans": ["CapEx projections", "investment plans", "asset acquisition strategy", "infrastructure spending", "capital outlays"],
+    "Capital expenditure plans": ["Capex projections", "investment plans", "asset acquisition strategy", "infrastructure spending", "capital outlays"],
     "Working capital management": ["cash flow management", "liquidity management", "short-term asset management", "operational liquidity", "current asset efficiency"],
     # Growth Strategies:
     "Geographic expansion": ["market entry", "territorial growth", "global reach expansion", "new market penetration", "regional diversification"],
@@ -118,8 +118,8 @@ SEED_WORDS : Dict[str, List[str]] = {
     "Raw material costs": ["input costs", "material expenses", "commodity prices", "resource costs", "supply expenses"],
     "Labor costs": ["workforce expenses", "employee costs", "payroll expenses", "human resource costs", "wage and salary expenses"],
     "Overhead expenses": ["indirect costs", "fixed costs", "operating expenses", "overhead burden", "non-direct expenses"],
-    "Cost of goods sold (COGS)": ["production costs", "direct costs", "manufacturing expenses", "cost of sales", "product costs"],
-    "Selling, general, and administrative expenses (SG&A)": ["operating expenses", "overhead costs", "non-production costs", "administrative burden", "commercial expenses"],
+    "Cost of goods sold, COGS": ["production costs", "direct costs", "manufacturing expenses", "cost of sales", "product costs"],
+    "Selling, general, and administrative expenses, SG&A": ["operating expenses", "overhead costs", "non-production costs", "administrative burden", "commercial expenses"],
     # Risk Management:
     "Regulatory challenges": ["compliance issues", "legal hurdles", "regulatory environment", "policy challenges", "governmental constraints"],
     "Litigation updates": ["legal proceedings", "lawsuit status", "court case developments", "legal dispute updates", "judicial proceedings"],
