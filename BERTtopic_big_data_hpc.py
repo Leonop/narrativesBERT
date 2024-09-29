@@ -58,7 +58,7 @@ tqdm.pandas()
 class BERTopicGPU(object):
     def __init__(self):
         # Initialize the embedding model
-        self.embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cuda')
+        self.embedding_model = SentenceTransformer(gl.EMBEDDING_MODELS, device='cuda')
         # Dimensionality Reduction with UMAP (GPU version from cuML)
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
         # Clustering with MiniBatchKMeans
@@ -174,6 +174,12 @@ class BERTopicGPU(object):
 
         return topic_model
 
+    # Create a new column in the DataFrame to hold the top 30 keywords for each topic
+    def get_top_n_keywords(self, topic_model, topic_id, n=30):
+        # Fetch the top n keywords for the topic
+        keywords = topic_model.get_topic(topic_id)[:n]
+        # Join the keywords into a single string for easy display
+        return ', '.join([keyword for keyword, _ in keywords])
 
     # Main function with cross-validation
     def train_bert_topic_model_cv(self, docs, n_splits=10):
@@ -215,6 +221,8 @@ class BERTopicGPU(object):
             test_embeddings = self.embedding_model.encode(test_docs, show_progress_bar=True, device=device)
             topics, _ = topic_model.transform(test_docs)
             topic_info = topic_model.get_topic_info()
+            # Apply the function to get the top 30 keywords for each topic and store them in the 'Top_Keywords' column
+            topic_info['Top_Keywords'] = topic_info['Topic'].apply(lambda topic_id: self.get_top_n_keywords(topic_model, topic_id, n=30) if topic_id != -1 else '')
             # save the topic information to csv file
             TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_info_{fold}.csv")
             topic_info.to_csv(TOPIC_INFO_path, index=False)
@@ -282,7 +290,6 @@ class BERTopicGPU(object):
                     f.write(f"{item}\n")
                     pbar.update(1)
 
-    
     def load_file(self, path):
         # load the doc from a text file to a list
         with open(path, 'r') as f:

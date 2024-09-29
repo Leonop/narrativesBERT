@@ -1,9 +1,7 @@
 import os
 from typing import Dict, List
 import pandas as pd
-# MIN_CLUSTER_SIZE = 20
-# N_TOPICS = 100
-# N_TOP_WORDS = 15
+
 
 # Directory locations
 
