@@ -52,7 +52,7 @@ tqdm.pandas()
 # BERTopic
 # Enableing the GPU for BERTopic
 # First, you'll need to enable GPUs for the notebook:
-# Navigate to Edit 🡒 Notebook Setting
+# Navigate to Edit
 # Select GPU from the Hardware Accelerator dropdown
 
 class BERTopicGPU(object):
@@ -225,14 +225,25 @@ class BERTopicGPU(object):
             # save the number of topics, and the {fold+1}th fold's silhouette score, and score into a file
             self.save_model_scores(fold + 1, n_cluster, sscore, cscore)
             print(f"Silhouette score for fold {fold + 1}: {sscore}, Coherence score for fold {fold + 1}: {cscore}")
-        avg_score = np.mean(fold_scores)
-        print(f"\nAverage Silhouette Score across {n_splits} folds: {avg_score}")
-            # Compute the average silhouette score and coherence score across all folds
+            
+            # Check if this model has the best coherence score
+            if cscore > best_cscore:
+                best_cscore = cscore
+                best_model = topic_model  # Save the best model
+           # Compute the average silhouette score and coherence score across all folds
         avg_sscore = np.mean([score[0] for score in fold_scores])
         avg_cscore = np.mean([score[1] for score in fold_scores])
-        self.save_results(topic_model, n_cluster)
+                
         self.save_model_scores("10 fold Average Score", n_cluster, avg_sscore, avg_cscore)
-        return topic_model
+
+        # Save the best model
+        if best_model:
+            self.save_results(best_model, n_cluster)  # Save the best model based on cscore
+        
+        print(f"\nBest model coherence score: {best_cscore}")
+        print(f"\nAverage Silhouette Score across {n_splits} folds: {avg_sscore}")
+        
+        return best_model
     
     def save_results(self, topic_model, n_cluster):
         # Save the BERTopic model
