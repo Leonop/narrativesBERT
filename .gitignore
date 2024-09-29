@@ -10,3 +10,4 @@ my_gpu_job.err
 Miniconda3-latest-Linux-x86_64.sh
 BERTtopic_big_data_hpc.ipynb
 log_files
+myenv/*

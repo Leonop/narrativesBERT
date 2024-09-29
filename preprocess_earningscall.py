@@ -73,7 +73,7 @@ class NlpPreProcess(object):
         self.wnl = WordNetLemmatizer() # 词形还原
         self.ps = PorterStemmer() # 词干提取
         self.sb = SnowballStemmer('english') # 词干提取
-        self.stoplist = list(set([word.strip().lower() for word in gl.stop_list]))
+        self.stoplist = list(set([word.strip() for word in gl.stop_list]))
         self.nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])  # Disable NER and dependency parser for speed
 
      
@@ -118,7 +118,7 @@ class NlpPreProcess(object):
         '''构造trigram'''
         return [trigam_mod[doc] for doc in data_words]
     
-    def smart_ngrams(self, docs, min_count=5, threshold=10):
+    def smart_ngrams(self, docs, min_count=1, threshold=5):
         """
         Create meaningful bigrams and trigrams from the list of tokenized documents.
         :param docs: List of tokenized documents
@@ -138,24 +138,20 @@ class NlpPreProcess(object):
         bigram_trigram_docs = [
             bigram[doc] + [token for token in trigram[bigram[doc]] if '_' in token] for doc in docs
         ]
-
         return bigram_trigram_docs
-
-        return bigram_tokens + trigram_tokens
     
-    def lemmatization(self, text, allowed_postags=['NOUN', 'VERB']):
+    def lemmatization(self, text, allowed_postags=['NOUN']):
         '''Lemmatize and filter tokens by part-of-speech'''
         texts_out = []
         doc = self.nlp(text)        
         # Filter allowed POS tags and lemmatize
         texts_out.append([token.lemma_ for token in doc if token.pos_ in allowed_postags])
-
         return texts_out[0]  # Return flat list of lemmatized tokens
 
     def remove_stopwords(self, tokens):
         '''Remove stopwords from tokenized words'''
         # Ensure stopwords and tokens are all lowercase and stripped of spaces
-        self.stoplist = {word.strip().lower() for word in self.stoplist}  # Normalize stoplist
+        self.stoplist = {word.strip() for word in self.stoplist}  # Normalize stoplist
         return [word for word in tokens if isinstance(word, str) and word.lower() not in self.stoplist]
 
     def remove_punct_and_digits(self, text):
