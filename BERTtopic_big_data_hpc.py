@@ -36,7 +36,7 @@ from cuml.manifold import UMAP
 from cuml.cluster import HDBSCAN
 from bertopic import BERTopic
 from sklearn.cluster import MiniBatchKMeans
-from model_selection_hpc import vectorize_doc
+from model_selection_hpc import vectorize_doc, create_tfidf_vectorizer
 import torch
 from sklearn.model_selection import KFold
 from sklearn.metrics import silhouette_score
@@ -58,11 +58,13 @@ tqdm.pandas()
 class BERTopicGPU(object):
     def __init__(self):
         # Initialize the embedding model
-        self.embedding_model = SentenceTransformer(gl.EMBEDDING_MODELS, device='cuda')
+        self.embedding_model = SentenceTransformer(gl.EMBEDDING_MODELS[0], device='cuda')
         # Dimensionality Reduction with UMAP (GPU version from cuML)
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
+        self.hdbscan_model = HDBSCAN(min_cluster_size=gl.MIN_CLUSTER_SIZE[0], min_samples=gl.MIN_SAMPLES[0], cluster_selection_epsilon='eom', prediction_data=True)
         # Clustering with MiniBatchKMeans
-        self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
+        self.tfidf_vectorizer = create_tfidf_vectorizer()
+        # self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
     def load_data(self):
         # Check if the file exists
         if not os.path.exists(file_path):
@@ -164,7 +166,6 @@ class BERTopicGPU(object):
             calculate_probabilities=True,
             verbose=True
         )
-
         try:
             # Fit the model and check for any issues
             topic_model.fit(train_docs, embeddings=embeddings)
@@ -183,6 +184,7 @@ class BERTopicGPU(object):
 
     # Main function with cross-validation
     def train_bert_topic_model_cv(self, docs, n_splits=10):
+        best_cscore = float('-inf')  # Initialize best_cscore to a very low value
         # Check if a GPU is available
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Using device: {device}")
@@ -295,10 +297,37 @@ class BERTopicGPU(object):
         with open(path, 'r') as f:
             return f.readlines()
         
+    
+    def run_Bertopic(self, docs):
+        # Fit BERTopic with precomputed embeddings and models
+        vectorizer_model = vectorize_doc(docs)
+        topic_model = BERTopic(
+            embedding_model=self.embedding_model,
+            umap_model=self.umap_model,
+            hdbscan_model = self.hdbscan_model,  # You are using KMeans here, not HDBSCAN, which is fine
+            vectorizer_model=vectorizer_model,
+            calculate_probabilities=True,
+            verbose=True
+        )
+
+        try:
+            # Fit the model and check for any issues
+            topic_model.fit(docs, embeddings=self.embeddings)
+        except ValueError as e:
+            print(f"Error during BERTopic fitting: {e}")
+            raise
+
+        return topic_model
+        
 if __name__ == "__main__":
     bt = BERTopicGPU()
     meta = bt.load_data()
-    doc_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
+    if gl.NROWS > 1000000:
+        n = gl.NROWS // 1000000
+        file_postfix = f'{n}M'
+    else:
+        file_postfix = f'{gl.NROWS}'
+    doc_path = os.path.join(gl.output_folder, f'preprocessed_docs_{file_postfix}.txt')
     # if the processed doc file is exist, please load it
     if os.path.exists(doc_path):
         docs = bt.load_file(doc_path)
@@ -307,7 +336,8 @@ if __name__ == "__main__":
         docs = bt.pre_process_text(meta)
         # save pre_process_text to local file
         bt.save_file(docs, doc_path, bar_length = 100)    
-    topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
+    # topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
+    topic_model = bt.run_Bertopic(docs)
     bt.save_figures(topic_model)
     print("BERTopic model training completed.")
     

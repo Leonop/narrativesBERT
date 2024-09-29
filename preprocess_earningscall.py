@@ -156,11 +156,21 @@ class NlpPreProcess(object):
 
     def remove_punct_and_digits(self, text):
         '''Remove punctuation and digits using regular expressions'''
+        punctuation = string.punctuation.replace('-', '')
         text = re.sub(r'[{}]'.format(string.punctuation), ' ', text)  # Remove punctuation
         text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
         text = re.sub(r'\d+', '', text)  # Remove digits
         return text.strip()  # Trim any leading/trailing spaces
     
+    def lemmatization_batch(self, texts, allowed_postags= ['NOUN', 'PROPN', 'ADJ', 'VERB']):
+        '''Lemmatize and filter tokens by part-of-speech in batches'''
+        texts_out = []
+        # Process texts in batches
+        for doc in self.nlp.pipe(texts, batch_size=1000, n_process=8):
+            lemmas = [token.lemma_ for token in doc if token.pos_ in allowed_postags]
+            texts_out.append(lemmas)
+        return texts_out
+
     def preprocess_file(self, df, col):
         '''Preprocess the file: remove punctuation, digits, stopwords, lemmatize, and create n-grams'''
         stime = datetime.now()
@@ -174,24 +184,21 @@ class NlpPreProcess(object):
         df[col] = df[col].progress_apply(nltk.word_tokenize)
         print(f"Step 2 completed in {datetime.now() - stime}")
         print(df.loc[1, col])
-        # Step 3: Remove stopwords
-        # df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x))
-        # print(f"Step 3 completed in {datetime.now() - stime}")   
-        # print(df.loc[1, col]) 
-        # Step 4: Apply lemmatization
-        df[col] = df[col].progress_apply(lambda x: self.lemmatization(' '.join(x)))
+
+        # Step 3: Apply lemmatization
+        df[col] = df[col].progress_apply(lambda x: self.lemmatization_batch(' '.join(x)))
         print(f"Step 4 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
-        # Step 5: Create bigrams and trigrams
-        df[col] = pd.Series(self.smart_ngrams(df[col].tolist()))
-        print(f"Step 5 completed in {datetime.now() - stime}")
-        print(df.loc[1, col]) 
-        # Step 6: Remove stopwords from bigrams and trigrams
+        # Step 4: Create bigrams and trigrams
+        # df[col] = pd.Series(self.smart_ngrams(df[col].tolist()))
+        # print(f"Step 5 completed in {datetime.now() - stime}")
+        # print(df.loc[1, col]) 
+        # Step 5: Remove stopwords from bigrams and trigrams
         df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x and len(str(x)) >= 2)
         print(f"Step 6 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
-        # Step 7: Rejoin tokenized words into a string
-        df[col] = df[col].progress_apply(lambda x: ' '.join(x) if isinstance(x, list) else str(x))
+        # Step 6: Rejoin tokenized words into a string
+        df[col] = df[col].progress_apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
 
         print(f"Step 7 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
