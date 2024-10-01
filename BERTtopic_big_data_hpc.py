@@ -361,7 +361,7 @@ class BERTopicGPU(object):
         
         results = pd.DataFrame(columns=["Number of Topics", "Silhouette Score", "Coherence Score"])
         for num_topics in tqdm(range(10, 200, 10), desc="Training BERTopic models", colour="green", ncols=100):
-            cluster_model = KMeans(n_clusters=num_topics, random_state=0)
+            cluster_model = MiniBatchKMeans(n_clusters=num_topics, random_state=0)
             document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
             # convert the document embeddings to cupy for cuML
             document_embeddings_gpu = cp.array(document_embeddings)

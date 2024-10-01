@@ -35,7 +35,7 @@ class BERTopicGPU(object):
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
         # Clustering with MiniBatchKMeans
         self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
-        self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES, min_cluster_size=gl.MIN_CLUSTER_SIZE, prediction_data=True)
+        self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES[0], min_cluster_size=gl.MIN_CLUSTER_SIZE[0], prediction_data=True)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         # Initialize TfidfVectorizer with desired parameters
         self.vectorizer = TfidfVectorizer(
@@ -128,9 +128,18 @@ class BERTopicGPU(object):
         batch_embed = embedding_model.encode(batch, device= self.device)
         return batch_embed, i, i_end
     
-    def Bertopic_run(self, docs, embeddings):
+    def Bertopic_run(self, docs):
+ 
+        # Initialize an empty array for embeddings
+        embeddings = np.zeros((len(docs), self.embedding_model.get_sentence_embedding_dimension()))
+        
+        # Process documents in batches to compute embeddings
+        batch_size = gl.BATCH_SIZE
+        for i in tqdm(range(0, len(docs), batch_size), colour="Blue"):
+            batch_embed, i, i_end = self.process_batch_gpu(i, batch_size, docs, self.embedding_model, len(docs))
+            embeddings[i:i_end, :] = batch_embed
+        
         # Ensure embeddings do not have NaN or Inf
-        embeddings = self.embedding_model.encode(docs, show_progress_bar=True)
         embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=0.0, neginf=0.0)
         
         # Check if the shape of embeddings matches the number of documents
@@ -139,15 +148,7 @@ class BERTopicGPU(object):
         
         print(f"Embeddings shape: {embeddings.shape}")
         print(f"Number of training documents: {len(docs)}")
-        
-        # use HDBSCAN model to cluster
-        batch_size = gl.BATCH_SIZE
-        for i in tqdm(range(0, len(docs), batch_size), colour="Blue"):
-            batch_embed, i, i_end = self.process_batch_gpu(i, batch_size, docs, self.embedding_model, len(docs))
-            embeddings[i:i_end, :] = batch_embed
             
-        # use tfidf to vectorize object
-        
         # Fit BERTopic with precomputed embeddings and models
         topic_model = BERTopic(
             embedding_model=self.embedding_model,
@@ -163,89 +164,53 @@ class BERTopicGPU(object):
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
+        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.MIN_CLUSTER_SIZE[0]}"))
         return topic_model
     
-    def plot_doc_embedding(self, docs):
-        # Get the embeddings and reduce them to 2D
-        document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
-        reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
-        vectorizer_model = vectorize_doc(docs)
-        topic_model = self.train_on_fold(docs, document_embeddings, vectorizer_model)
-        # Ensure that reduced embeddings, topics, and docs have the same length
-        if len(reduced_embeddings_2d) != len(docs) or len(topic_model.topics_) != len(docs):
-            raise ValueError("Mismatch between the number of embeddings, documents, and topics")
+    # def plot_doc_embedding(self, docs):
+    #     # Get the embeddings and reduce them to 2D
+    #     document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
+    #     reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
+    #     vectorizer_model = vectorize_doc(docs)
+    #     topic_model = BERTopic.load(os.path.join(gl.model_folder, f"bertopic_model_{gl.MIN_CLUSTER_SIZE[0]}"))
+    #     # Ensure that reduced embeddings, topics, and docs have the same length
+    #     if len(reduced_embeddings_2d) != len(docs) or len(topic_model.topics_) != len(docs):
+    #         raise ValueError("Mismatch between the number of embeddings, documents, and topics")
 
-        # Proceed to create the DataFrame if everything matches
-        visual_df = pd.DataFrame({
-            "x": reduced_embeddings_2d[:, 0],
-            "y": reduced_embeddings_2d[:, 1],
-            "Topic": topic_model.topics_  # Add topics to the dataframe
-        })
+    #     # Proceed to create the DataFrame if everything matches
+    #     visual_df = pd.DataFrame({
+    #         "x": reduced_embeddings_2d[:, 0],
+    #         "y": reduced_embeddings_2d[:, 1],
+    #         "Topic": topic_model.topics_  # Add topics to the dataframe
+    #     })
         
-        # Assigning colors to topics
-        colors = itertools.cycle(['#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#e41a1c', '#ffff33', '#a65628', 
-                                '#f781bf', '#999999', '#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', 
-                                '#ffd92f', '#e5c494', '#b3b3b3', '#1f78b4', '#33a02c', '#fb9a99'])
+    #     # Assigning colors to topics
+    #     colors = itertools.cycle(['#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#e41a1c', '#ffff33', '#a65628', 
+    #                             '#f781bf', '#999999', '#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', 
+    #                             '#ffd92f', '#e5c494', '#b3b3b3', '#1f78b4', '#33a02c', '#fb9a99'])
 
-        color_key = {str(topic): next(colors) for topic in set(topic_model.topics_) if topic != -1}
+    #     color_key = {str(topic): next(colors) for topic in set(topic_model.topics_) if topic != -1}
         
-        # Map colors to the DataFrame based on topic
-        visual_df["color"] = visual_df["Topic"].map(lambda x: color_key.get(str(x), '#999999'))  # Default color if topic not found
+    #     # Map colors to the DataFrame based on topic
+    #     visual_df["color"] = visual_df["Topic"].map(lambda x: color_key.get(str(x), '#999999'))  # Default color if topic not found
 
-        # Create a scatter plot
-        plt.figure(figsize=(16, 16))
+    #     # Create a scatter plot
+    #     plt.figure(figsize=(16, 16))
         
-        # Scatter plot of the documents with the assigned colors
-        plt.scatter(visual_df["x"], visual_df["y"], c=visual_df["color"], alpha=0.4, s=1)  # alpha for transparency, s for small point size
+    #     # Scatter plot of the documents with the assigned colors
+    #     plt.scatter(visual_df["x"], visual_df["y"], c=visual_df["color"], alpha=0.4, s=1)  # alpha for transparency, s for small point size
 
-        # Title for the plot
-        plt.title("Article-level Nearest Neighbor Embedding", fontsize=16)
+    #     # Title for the plot
+    #     plt.title("Article-level Nearest Neighbor Embedding", fontsize=16)
         
-        # Remove the axis labels for a cleaner look
-        plt.axis("off")
-        # Optionally, save the plot as a high-resolution PNG file
-        save_path = os.path.join(gl.output_fig_folder, "article_level_embedding_plot.pdf")
-        plt.savefig(save_path, format="pdf", dpi=600)
-        # Show the plot
-        plt.show()
-        
-
-    def plot_model_selection(self, df):
-        """
-        Function to plot model selection data with two curves: 
-        Silhouette Score and Coherence Score.
-        
-        Parameters:
-        df (pd.DataFrame): Dataframe containing 'Number of Topics', 'Silhouette Score', and 'Coherence Score'
-        """
-        plt.figure(figsize=(8, 6))
-
-        # Plot Cross-Validation (Silhouette Score) in blue
-        plt.plot(df['Number of Topics'], df['Silhouette Score'], label='Cross-Validation', color='blue')
-
-        # Plot Bayes-Factor (Coherence Score) in red
-        plt.plot(df['Number of Topics'], df['Coherence Score'], label='Bayes-Factor', color='red')
-
-        # Highlight the maximum point of Cross-Validation (Silhouette Score)
-        max_silhouette_idx = df['Silhouette Score'].idxmax()
-        plt.scatter(df['Number of Topics'].iloc[max_silhouette_idx], df['Silhouette Score'].iloc[max_silhouette_idx], 
-                    color='red', s=100, label='Max Silhouette', marker='^')
-
-        # Adding labels and title
-        plt.title("Model Selection", fontsize=16, fontweight='bold')
-        plt.xlabel("Number of Topics (K)", fontsize=12)
-        plt.ylabel("Score", fontsize=12)
-
-        # Adding grid and legend
-        plt.grid(True, which='both', axis='x', linestyle='--', alpha=0.6)
-        plt.legend(loc='best')
-
-        # Show the plot
-        plt.tight_layout()
-        plt.show()
-        # save it to output fig folder as pdf file
-        save_path = os.path.join(gl.output_fig_folder, "model_selection_plot.pdf")  
-        plt.savefig(save_path, format="pdf", dpi=600)
+    #     # Remove the axis labels for a cleaner look
+    #     plt.axis("off")
+    #     # Optionally, save the plot as a high-resolution PNG file
+    #     save_path = os.path.join(gl.output_fig_folder, "article_level_embedding_plot.pdf")
+    #     plt.savefig(save_path, format="pdf", dpi=400)
+    #     # Show the plot
+    #     plt.show()
+    
 
     def save_file(self, data, path, bar_length=100):
         #write the doc to a txt file
@@ -261,13 +226,26 @@ class BERTopicGPU(object):
         fig = topic_model.visualize_barchart(top_n_topics=gl.num_topic_to_plot)
         fig.write_image(visualization_path)
         fig1 = topic_model.visualize_topics()
-        fig1.write_image(visualization_path.replace('.pdf', '_intertopic_distance_map.pdf'))
+        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.NROWS}.pdf'))
         fig2 = topic_model.visualize_heatmap()
-        fig2.write_image(visualization_path.replace('.pdf', '_heatmap.pdf'))
+        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.NROWS}.pdf'))
         fig3 = topic_model.visualize_hierarchy()
-        fig3.write_image(visualization_path.replace('.pdf', '_hierarchy.pdf'))
+        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
+    def load_doc(self, path):
+        # load the doc from a txt file to a list
+        with open(path, 'r') as f:
+            return f.readlines()
+        
+    def save_topic_keywords(self, topic_model):
+        # Get topic information and save
+        topic_info = topic_model.get_topic_info()
+        num_topic = len(topic_info)
+        # save the topic information to csv file
+        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{num_topic}.csv")
+        topic_info.to_csv(TOPIC_INFO_path, index=False)
+    
 if __name__ == "__main__":
     bt = BERTopicGPU()
     meta = bt.load_data()
@@ -281,6 +259,7 @@ if __name__ == "__main__":
         bt.save_file(docs, docs_path, bar_length=100)
     # topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     topic_model = bt.Bertopic_run(docs)
-    bt.save(topic_model)
-    bt.plot_doc_embedding(docs)
+    bt.save_topic_keywords(topic_model)
+    # bt.plot_doc_embedding(docs)
+    bt.save_figures(topic_model)
     print("BERTopic model training completed.")
