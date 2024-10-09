@@ -68,8 +68,7 @@ class BERTopicGPU(object):
         RESET = '\033[0m'
         # Wrap the chunk reader with tqdm to track progress
         for chunk in tqdm(chunk_reader, total=nrows//chunk_size, bar_format=f'{GREEN}{{l_bar}}{{bar:20}}{{r_bar}}{RESET}'):
-            # Select papers published later than 2013
-            filtered_chunk = chunk[chunk["year"] <= gl.YEAR_FILTER]
+            filtered_chunk = chunk[(chunk["year"] <= gl.YEAR_FILTER) & (chunk["year"] >= gl.START_YEAR)]
             filtered_chunk = filtered_chunk.reset_index()
             meta = pd.concat([meta, filtered_chunk], ignore_index=True)
         return meta
@@ -166,50 +165,6 @@ class BERTopicGPU(object):
             raise
         topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.MIN_CLUSTER_SIZE[0]}"))
         return topic_model
-    
-    # def plot_doc_embedding(self, docs):
-    #     # Get the embeddings and reduce them to 2D
-    #     document_embeddings = self.embedding_model.encode(docs, show_progress_bar=True, device=self.device)
-    #     reduced_embeddings_2d = self.umap_model.fit_transform(document_embeddings)
-    #     vectorizer_model = vectorize_doc(docs)
-    #     topic_model = BERTopic.load(os.path.join(gl.model_folder, f"bertopic_model_{gl.MIN_CLUSTER_SIZE[0]}"))
-    #     # Ensure that reduced embeddings, topics, and docs have the same length
-    #     if len(reduced_embeddings_2d) != len(docs) or len(topic_model.topics_) != len(docs):
-    #         raise ValueError("Mismatch between the number of embeddings, documents, and topics")
-
-    #     # Proceed to create the DataFrame if everything matches
-    #     visual_df = pd.DataFrame({
-    #         "x": reduced_embeddings_2d[:, 0],
-    #         "y": reduced_embeddings_2d[:, 1],
-    #         "Topic": topic_model.topics_  # Add topics to the dataframe
-    #     })
-        
-    #     # Assigning colors to topics
-    #     colors = itertools.cycle(['#377eb8', '#4daf4a', '#984ea3', '#ff7f00', '#e41a1c', '#ffff33', '#a65628', 
-    #                             '#f781bf', '#999999', '#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854', 
-    #                             '#ffd92f', '#e5c494', '#b3b3b3', '#1f78b4', '#33a02c', '#fb9a99'])
-
-    #     color_key = {str(topic): next(colors) for topic in set(topic_model.topics_) if topic != -1}
-        
-    #     # Map colors to the DataFrame based on topic
-    #     visual_df["color"] = visual_df["Topic"].map(lambda x: color_key.get(str(x), '#999999'))  # Default color if topic not found
-
-    #     # Create a scatter plot
-    #     plt.figure(figsize=(16, 16))
-        
-    #     # Scatter plot of the documents with the assigned colors
-    #     plt.scatter(visual_df["x"], visual_df["y"], c=visual_df["color"], alpha=0.4, s=1)  # alpha for transparency, s for small point size
-
-    #     # Title for the plot
-    #     plt.title("Article-level Nearest Neighbor Embedding", fontsize=16)
-        
-    #     # Remove the axis labels for a cleaner look
-    #     plt.axis("off")
-    #     # Optionally, save the plot as a high-resolution PNG file
-    #     save_path = os.path.join(gl.output_fig_folder, "article_level_embedding_plot.pdf")
-    #     plt.savefig(save_path, format="pdf", dpi=400)
-    #     # Show the plot
-    #     plt.show()
     
 
     def save_file(self, data, path, bar_length=100):
