@@ -141,7 +141,7 @@ class NlpPreProcess(object):
 
         return bigram_trigram_docs
     
-    def lemmatization(self, text, allowed_postags=['NOUN', 'VERB']):
+    def lemmatization(self, text, allowed_postags=['NOUN', 'ADJ', 'VERB']):
         '''Lemmatize and filter tokens by part-of-speech'''
         texts_out = []
         doc = self.nlp(text)        
@@ -173,11 +173,12 @@ class NlpPreProcess(object):
         print(f"Step 1 completed in {datetime.now() - stime}")
         print(df.loc[1, col])
         # Step 2: Tokenize into words
-        df[col] = df[col].progress_apply(nltk.word_tokenize)
+        # df[col] = df[col].progress_apply(nltk.word_tokenize)
+        df[col] = df[col].progress_apply(lambda x: [token.text for token in self.nlp(x) if not token.is_space])
         print(f"Step 2 completed in {datetime.now() - stime}")
         print(df.loc[1, col])
         # Step 3: Remove stopwords
-        # df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x))
+        df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x and len(str(x)) >= 2)
         # print(f"Step 3 completed in {datetime.now() - stime}")   
         # print(df.loc[1, col]) 
         # Step 4: Apply lemmatization
@@ -185,11 +186,11 @@ class NlpPreProcess(object):
         print(f"Step 4 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
         # Step 5: Create bigrams and trigrams
-        df[col] = pd.Series(self.smart_ngrams(df[col].tolist()))
+        df[col] = pd.Series(self.smart_ngrams(df[col].tolist(), gl.MIN_COUNT, gl.THRESHOLD))
         print(f"Step 5 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
         # Step 6: Remove stopwords from bigrams and trigrams
-        df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x and len(str(x)) >= 2)
+        # df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x and len(str(x)) >= 2)
         print(f"Step 6 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
         # Step 7: Rejoin tokenized words into a string

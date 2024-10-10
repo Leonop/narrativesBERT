@@ -20,24 +20,27 @@ TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
 MODEL_SELECTION_RESULTS = os.path.join(output_folder, "model_selection_results.csv")
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-NROWS = 3000000 # number of rows to read from the csv file
+NROWS = 12000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
-YEAR_FILTER = 2015 # train the model on data from start year to this year
+YEAR_FILTER = 2012 # train the model on data from start year to this year
 START_YEAR = 2006 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
 BATCH_SIZE = 1000
 
 # create a list of parameters to search over using GridSearchCV
-N_NEIGHBORS = [10] 
-N_COMPONENTS = [5]
-MIN_DIST = [0.5]
-MIN_SAMPLES = [5]
-MIN_CLUSTER_SIZE = [25] 
+N_NEIGHBORS = [25] 
+N_COMPONENTS = [15] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
+MIN_DIST = [0.3] # Lower value will make the topic more distinct from each other
+MIN_SAMPLES = [5] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
+MIN_CLUSTER_SIZE = [75] # A large value will lead to larger, more stable clusters, but fewer clusters.
 N_TOPICS = [100] # Number of Topics in Topic Model
-N_TOP_WORDS = [20]
+N_TOP_WORDS = [35] # Number of Top Words in Topic Model
 METRIC = ['cosine']
 EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2'] #'all-MiniLM-L6-v2'
-
+MAX_DF = [0.8] # remove the top 20% of the most frequent words
+MIN_DF = [5] # eliminate very rare words
+MIN_COUNT = 10 # SMART_N_GRAM minimum number of times a word must appear in the corpus to be included in the vocabulary
+THRESHOLD = 15 # SMART_N_GRAM
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
 SEED_WORDS : Dict[str, List[str]] = {

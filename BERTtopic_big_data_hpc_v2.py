@@ -34,15 +34,15 @@ class BERTopicGPU(object):
         # Dimensionality Reduction with UMAP (GPU version from cuML)
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
         # Clustering with MiniBatchKMeans
-        self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
+        # self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
         self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES[0], min_cluster_size=gl.MIN_CLUSTER_SIZE[0], prediction_data=True)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         # Initialize TfidfVectorizer with desired parameters
         self.vectorizer = TfidfVectorizer(
-            max_df=0.95,              # Ignore terms with a document frequency higher than this threshold
-            min_df=2,                 # Ignore terms with a document frequency lower than this threshold
+            max_df=gl.MAX_DF[0],              # Ignore terms with a document frequency higher than this threshold
+            min_df=gl.MIN_DF[0],                 # Ignore terms with a document frequency lower than this threshold
             stop_words='english',     # Remove English stop words
-            ngram_range=(1, 3),       # Consider unigrams and bigrams
+            ngram_range=(1, 1),       # Consider unigrams and bigrams
             use_idf=True,             # Enable inverse document frequency reweighting
             smooth_idf=True           # Smooth IDF weights by adding one to document frequencies
         )
