@@ -155,6 +155,7 @@ class BERTopicGPU(object):
             hdbscan_model = self.hdbscan_model,  # You are using KMeans here, not HDBSCAN, which is fine
             vectorizer_model=self.vectorizer,
             calculate_probabilities=True,
+            topic_n_words=gl.TOPIC_N_WORDS[0],
             verbose=True
         )
         try:
