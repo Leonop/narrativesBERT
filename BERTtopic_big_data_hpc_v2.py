@@ -68,7 +68,7 @@ class BERTopicGPU(object):
         RESET = '\033[0m'
         # Wrap the chunk reader with tqdm to track progress
         for chunk in tqdm(chunk_reader, total=nrows//chunk_size, bar_format=f'{GREEN}{{l_bar}}{{bar:20}}{{r_bar}}{RESET}'):
-            filtered_chunk = chunk[(chunk["year"] <= gl.YEAR_FILTER) & (chunk["year"] >= gl.START_YEAR)]
+            filtered_chunk = chunk[(chunk["year"] <= gl.YEAR_FILTER) & (chunk["year"] >= gl.START_YEAR)] # Filter by START_YEAR and YEAR_FILTER
             filtered_chunk = filtered_chunk.reset_index()
             meta = pd.concat([meta, filtered_chunk], ignore_index=True)
         return meta
