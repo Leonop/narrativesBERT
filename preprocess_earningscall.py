@@ -140,8 +140,6 @@ class NlpPreProcess(object):
         ]
 
         return bigram_trigram_docs
-
-        return bigram_tokens + trigram_tokens
     
     def lemmatization(self, text, allowed_postags=['NOUN', 'VERB']):
         '''Lemmatize and filter tokens by part-of-speech'''
