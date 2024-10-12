@@ -70,7 +70,9 @@ class BERTopicGPU(object):
         for chunk in tqdm(chunk_reader, total=nrows//chunk_size, bar_format=f'{GREEN}{{l_bar}}{{bar:20}}{{r_bar}}{RESET}'):
             filtered_chunk = chunk[(chunk["year"] <= gl.YEAR_FILTER) & (chunk["year"] >= gl.START_YEAR)] # Filter by START_YEAR and YEAR_FILTER
             filtered_chunk = filtered_chunk.reset_index()
+            filtered_chunk = filtered_chunk.sort_values(by='isdelayed_flag', ascending=False).drop_duplicates(subset=gl.UNIQUE_KEYS, keep='first')
             meta = pd.concat([meta, filtered_chunk], ignore_index=True)
+        
         return meta
 
     def pre_process_text(self, data):
@@ -155,7 +157,7 @@ class BERTopicGPU(object):
             hdbscan_model = self.hdbscan_model,  # You are using KMeans here, not HDBSCAN, which is fine
             vectorizer_model=self.vectorizer,
             calculate_probabilities=True,
-            topic_n_words=gl.TOPIC_N_WORDS[0],
+            top_n_words=gl.TOP_N_WORDS[0],
             verbose=True
         )
         try:
@@ -201,15 +203,20 @@ class BERTopicGPU(object):
         # save the topic information to csv file
         TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{num_topic}.csv")
         topic_info.to_csv(TOPIC_INFO_path, index=False)
+        
+
+
     
 if __name__ == "__main__":
     bt = BERTopicGPU()
-    meta = bt.load_data()
     docs_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
     # if the processed doc file is exist, please load it
+    print(docs_path)
     if os.path.exists(docs_path):
+        print("Reading preprocessed docs from preprocessed_docs.txt")
         docs = bt.load_doc(docs_path)
     else:
+        meta = bt.load_data()
         docs = bt.pre_process_text(meta)
         # save docs to a file
         bt.save_file(docs, docs_path, bar_length=100)
