@@ -80,12 +80,13 @@ class BERTopicGPU(object):
         nlp = NlpPreProcess()
         data = data[data['speakertypeid'] != 1]
         data['text'] = data[gl.TEXT_COLUMN].astype(str)
-        data['text'] = nlp.preprocess_file(data, 'text')
         data['post_date'] = pd.to_datetime(data[gl.DATE_COLUMN])
         data['post_year'] = data['post_date'].dt.year
         data['post_quarter'] = data['post_date'].dt.month
         data['yearq'] = data['post_year'].astype(str) + 'Q' + data['post_quarter'].astype(str)
         data = data.drop(columns = ['Unnamed: 0'])
+        data['text'] = nlp.preprocess_file(data, 'text')
+        data = data.drop_duplicates(subset='text', keep='first')
         docs = [str(row['text']) for _, row in data.iterrows() if len(str(row["text"])) > 30]
         return docs
 
@@ -166,7 +167,7 @@ class BERTopicGPU(object):
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
-        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.MIN_CLUSTER_SIZE[0]}"))
+        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}"))
         return topic_model
     
 
@@ -215,6 +216,7 @@ if __name__ == "__main__":
     if os.path.exists(docs_path):
         print("Reading preprocessed docs from preprocessed_docs.txt")
         docs = bt.load_doc(docs_path)
+        docs = list(set(docs))
     else:
         meta = bt.load_data()
         docs = bt.pre_process_text(meta)

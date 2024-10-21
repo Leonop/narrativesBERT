@@ -23,24 +23,24 @@ TEXT_COLUMN = "componenttext" # the column in the main earnings call data that c
 NROWS = 10000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
 YEAR_FILTER = 2012 # train the model on data from start year to this year
-START_YEAR = 2006 # start year of the data
+START_YEAR = 2007 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
 BATCH_SIZE = 1000
 
 # create a list of parameters to search over using GridSearchCV
-N_NEIGHBORS = [20] 
-N_COMPONENTS = [7] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
-MIN_DIST = [0.2] # Lower value will make the topic more distinct from each other
-MIN_SAMPLES = [8] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
-MIN_CLUSTER_SIZE = [25] # A large value will lead to larger, more stable clusters, but fewer clusters.
+N_NEIGHBORS = [28] # Number of Neighbors in UMAP, the higher number requires more computational power
+N_COMPONENTS = [9] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
+MIN_DIST = [0.36] # Lower value will make the topic more distinct from each other
+MIN_SAMPLES = [13] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
+MIN_CLUSTER_SIZE = [35] # A large value will lead to larger, more stable clusters, but fewer clusters.
 N_TOPICS = [100] # Number of Topics in Topic Model
 TOP_N_WORDS = [25] # Number of Top Words in Topic Model
 METRIC = ['cosine']
 EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2'] #'all-MiniLM-L6-v2'
-MAX_DF = [0.85] # remove the top 15% of the most frequent words
-MIN_DF = [10] # eliminate very rare words
-MIN_COUNT = 5 # SMART_N_GRAM minimum number of times a word must appear in the corpus to be included in the vocabulary
-THRESHOLD = 10 # SMART_N_GRAM
+MAX_DF = [0.9] # remove the top 15% of the most frequent words
+MIN_DF = [5] # eliminate very rare words
+MIN_COUNT = 2 # SMART_N_GRAM minimum number of times a word must appear in the corpus to be included in the vocabulary
+THRESHOLD = 5 # SMART_N_GRAM
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
 SEED_WORDS : Dict[str, List[str]] = {
