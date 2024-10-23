@@ -21,8 +21,7 @@ from gensim.corpora.dictionary import Dictionary
 from visualize_topic_models import VisualizeTopics as vt
 import itertools
 from matplotlib import pyplot as plt
-from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, OpenAI, PartOfSpeech
-import openai
+from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, PartOfSpeech
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
@@ -48,15 +47,12 @@ class BERTopicGPU(object):
             use_idf=True,             # Enable inverse document frequency reweighting
             smooth_idf=True           # Smooth IDF weights by adding one to document frequencies
         )
+        
         self.representation_model = {
-                "KeyBERT": keybert_model,
-                "OpenAI": openai_model,  # Uncomment if you will use OpenAI
-                "MMR": mmr_model,
-                "POS": pos_model
+                "KeyBERT": KeyBERTInspired(),
+                "MMR": MaximalMarginalRelevance(diversity=0.3),
+                "POS": PartOfSpeech("en_core_web_sm")
             }
-        # read the openai api key from txt file
-        with open('openai_api_key.txt', 'r') as f:
-            self.api_key = f.read()
 
     def load_data(self):
         # Check if the file exists
@@ -227,23 +223,6 @@ class BERTopicGPU(object):
     
 if __name__ == "__main__":
     bt = BERTopicGPU()
-    keybert_model = KeyBERTInspired()
-    # Part-of-Speech
-    pos_model = PartOfSpeech("en_core_web_sm")
-    # MMR
-    mmr_model = MaximalMarginalRelevance(diversity=0.3)
-    # GPT-3.5
-    client = openai.OpenAI(api_key=bt.api_key)
-    prompt = """
-    I have a topic that contains the following documents: 
-    [DOCUMENTS]
-    The topic is described by the following keywords: [KEYWORDS]
-
-    Based on the information above, extract a short but highly descriptive topic label of at most 5 words. Make sure it is in the following format:
-    topic: <topic label>
-    """
-    openai_model = OpenAI(client, model="gpt-3.5-turbo", exponential_backoff=True, chat=True, prompt=prompt)
-        
     docs_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
     # if the processed doc file is exist, please load it
     print(docs_path)
