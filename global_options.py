@@ -17,7 +17,7 @@ DATE_COLUMN = "transcriptcreationdate_utc"
 num_topic_to_plot = 20 # top_N topics to plot
 
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-NROWS = 20000000 # number of rows to read from the csv file
+NROWS = 15000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
 YEAR_FILTER = 2025 # filter the data based on the year
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
@@ -27,8 +27,8 @@ BATCH_SIZE = 1000
 N_NEIGHBORS = [10] 
 N_COMPONENTS = [5]
 MIN_DIST = [0.5]
-MIN_SAMPLES = [10]
-MIN_CLUSTER_SIZE = [15] # in HDBSCAN: Minimum size of clusters
+MIN_SAMPLES = [30]
+MIN_CLUSTER_SIZE = [30] # in HDBSCAN: Minimum size of clusters
 N_TOPICS = [110]
 N_TOP_WORDS = [20]
 METRIC = ['cosine']
@@ -37,6 +37,7 @@ EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2'] #'all-MiniLM-L6-v2'
 # Parameters for TFIDF Vectorizer
 MAX_DF = [0.9] # float Max document frequency for words to include.
 MIN_DF = [2] # Min document frequency for words to include.
+N_GRAMS = [(1, 3)] # tuple (min_n, max_n) The lower and upper boundary of the range of n-values for different n-grams to be extracted.
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
 SEED_WORDS: Dict[str, List[str]] = {

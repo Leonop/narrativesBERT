@@ -42,6 +42,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import silhouette_score
 from gensim.models.coherencemodel import CoherenceModel
 from gensim.corpora.dictionary import Dictionary
+import cupy as cp
 
 
 warnings.filterwarnings('ignore')
@@ -64,7 +65,7 @@ class BERTopicGPU(object):
         self.hdbscan_model = HDBSCAN(min_cluster_size=gl.MIN_CLUSTER_SIZE[0], min_samples=gl.MIN_SAMPLES[0], cluster_selection_epsilon='eom', prediction_data=True)
         # Clustering with MiniBatchKMeans
         self.tfidf_vectorizer = create_tfidf_vectorizer()
-        # self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
+        self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
     def load_data(self):
         # Check if the file exists
         if not os.path.exists(file_path):
@@ -103,6 +104,8 @@ class BERTopicGPU(object):
         data['post_quarter'] = data['post_date'].dt.month
         data['yearq'] = data['post_year'].astype(str) + 'Q' + data['post_quarter'].astype(str)
         data = data.drop(columns = ['Unnamed: 0'])
+        print(f"Number of documents: {len(data)}")
+        print(data[['text']].head())
         docs = [str(row['text']) for _, row in data.iterrows() if len(str(row["text"])) > 30]
         return docs
 
@@ -296,29 +299,8 @@ class BERTopicGPU(object):
         # load the doc from a text file to a list
         with open(path, 'r') as f:
             return f.readlines()
-        
-    
-    def run_Bertopic(self, docs):
-        # Fit BERTopic with precomputed embeddings and models
-        vectorizer_model = vectorize_doc(docs)
-        topic_model = BERTopic(
-            embedding_model=self.embedding_model,
-            umap_model=self.umap_model,
-            hdbscan_model = self.hdbscan_model,  # You are using KMeans here, not HDBSCAN, which is fine
-            vectorizer_model=vectorizer_model,
-            calculate_probabilities=True,
-            verbose=True
-        )
 
-        try:
-            # Fit the model and check for any issues
-            topic_model.fit(docs, embeddings=self.embeddings)
-        except ValueError as e:
-            print(f"Error during BERTopic fitting: {e}")
-            raise
 
-        return topic_model
-        
 if __name__ == "__main__":
     bt = BERTopicGPU()
     meta = bt.load_data()
@@ -336,8 +318,7 @@ if __name__ == "__main__":
         docs = bt.pre_process_text(meta)
         # save pre_process_text to local file
         bt.save_file(docs, doc_path, bar_length = 100)    
-    # topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
-    topic_model = bt.run_Bertopic(docs)
+    topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     bt.save_figures(topic_model)
     print("BERTopic model training completed.")
     

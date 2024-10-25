@@ -140,7 +140,7 @@ class NlpPreProcess(object):
         ]
         return bigram_trigram_docs
     
-    def lemmatization(self, text, allowed_postags=['NOUN']):
+    def lemmatization(self, text, allowed_postags= ['NOUN', 'PROPN', 'ADJ', 'VERB']):
         '''Lemmatize and filter tokens by part-of-speech'''
         texts_out = []
         doc = self.nlp(text)        
@@ -198,7 +198,7 @@ class NlpPreProcess(object):
         print(f"Step 6 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
         # Step 6: Rejoin tokenized words into a string
-        df[col] = df[col].progress_apply(lambda x: ', '.join(x) if isinstance(x, list) else str(x))
+        df[col] = df[col].progress_apply(lambda x: ' '.join(x) if isinstance(x, list) else str(x))
 
         print(f"Step 7 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 

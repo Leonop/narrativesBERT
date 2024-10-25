@@ -162,7 +162,7 @@ def vectorize_doc(docs):
     vectorize_model = CountVectorizer(ngram_range=(1, 2), vocabulary=vocab, stop_words="english")
     return vectorize_model
 
-def create_tfidf_vectorizer(ngram_range=(1,2)):
+def create_tfidf_vectorizer():
     """
     Create a TF-IDF Vectorizer with custom parameters.
     
@@ -179,15 +179,15 @@ def create_tfidf_vectorizer(ngram_range=(1,2)):
         stop_words=gl.stop_list,
         max_df=gl.MAX_DF,
         min_df=gl.MIN_DF,
-        ngram_range=ngram_range,
+        ngram_range=gl.N_GRAMS,
         use_idf=True,
         smooth_idf=True,
         sublinear_tf=True
     )
     return vectorizer  
+
 # Function to train and evaluate BERTopic model
 def evaluate_topic_model(params, docs, vectorizer_model):
-
     # UMAP model to reduce the dimensionality of the embeddings
     umap_model = UMAP(
         n_neighbors=params['n_neighbors'], 
@@ -196,7 +196,6 @@ def evaluate_topic_model(params, docs, vectorizer_model):
         metric=params['metric'], 
         random_state=42
     )
-
     # HDBSCAN model to cluster the similar documents
     hdbscan_model = HDBSCAN(
         min_samples=params['min_samples'], 
