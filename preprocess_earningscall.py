@@ -9,7 +9,7 @@ import json
 import re
 import os
 import string
-import nltk
+# import nltk
 import spacy
 import torch
 from transformers import BertTokenizer, BertModel
@@ -37,11 +37,11 @@ from gensim.models.phrases import Phraser
 import spacy
 from tqdm import tqdm
 tqdm.pandas()
-nltk.download('punkt')
-nltk.download('wordnet')
-nltk.download('omw-1.4')
-nltk.download('punkt_tab')
-nltk.download('averaged_perceptron_tagger')
+# nltk.download('punkt')
+# nltk.download('wordnet')
+# nltk.download('omw-1.4')
+# nltk.download('punkt_tab')
+# nltk.download('averaged_perceptron_tagger')
 warnings.filterwarnings("ignore")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -73,14 +73,13 @@ class NlpPreProcess(object):
         self.wnl = WordNetLemmatizer() # 词形还原
         self.ps = PorterStemmer() # 词干提取
         self.sb = SnowballStemmer('english') # 词干提取
-        self.stoplist = list(set([word.strip() for word in gl.stop_list]))
+        self.stoplist = list(set([word.strip().lower() for word in gl.stop_list]))
         self.nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])  # Disable NER and dependency parser for speed
-
-     
+        
     def remove_stopwords_from_sentences(self, text):
         '''Split text by sentence, remove stopwords in each sentence, and rejoin sentences into one string'''
         # Split text into sentences
-        sentences = nltk.sent_tokenize(text)
+        sentences = self.nlp(text)
         # Process each sentence by removing stop words
         processed_sentences = []
         for sentence in sentences:
@@ -89,36 +88,8 @@ class NlpPreProcess(object):
         # Rejoin all processed sentences into a single string
         return ' '.join(processed_sentences)
     
-    def extract_name_company(self, text):
-        doc = self.nlp(text)
-        name = None
-        cmp = None
-        for ent in doc.ents:
-            if ent.label_ == 'PERSON':
-                name = ent.text
-            elif ent.label_ == 'ORG':
-                cmp = ent.text
-        return name, cmp
     
-    # def remove_stopwords(self, doc):
-    #     '''去除停用词'''
-    #     return [word for word in simple_preprocess(str(doc)) if word not in self.stoplist]
-    
-    ''' Explaination of ngrams: P(w1, w2, w3) = count(w1, w2, w3) / count(w1, w2)
-    '''
-    def make_bigrams(self, data_words ):
-        bigram = gensim.models.Phrases(data_words, min_count=5, threshold=0.1) # higher threshold fewer phrases.
-        bigram_mod = gensim.models.phrases.Phraser(bigram)
-        '''构造bigram'''
-        return [bigram_mod[doc] for doc in data_words]
-
-    def make_trigrams(self, data_words):
-        trigam = gensim.models.Phrases(data_words, min_count=5, threshold=0.1) # higher threshold fewer phrases.
-        trigam_mod = gensim.models.phrases.Phraser(trigam)
-        '''构造trigram'''
-        return [trigam_mod[doc] for doc in data_words]
-    
-    def smart_ngrams(self, docs, min_count=1, threshold=5):
+    def smart_ngrams(self, docs, min_count, threshold):
         """
         Create meaningful bigrams and trigrams from the list of tokenized documents.
         :param docs: List of tokenized documents
@@ -127,11 +98,11 @@ class NlpPreProcess(object):
         :return: List of tokenized documents with bigrams and trigrams
         """
         # Train the bigram model
-        bigram_phrases = Phrases(docs, min_count=min_count, threshold=threshold)
+        bigram_phrases = Phrases(docs, min_count=min_count, threshold=threshold,  delimiter='_')
         bigram = Phraser(bigram_phrases)
 
         # Train the trigram model on the bigram-transformed documents
-        trigram_phrases = Phrases(bigram[docs], min_count=min_count, threshold=threshold)
+        trigram_phrases = Phrases(docs, min_count=min_count, threshold=threshold, delimiter='_')
         trigram = Phraser(trigram_phrases)
 
         # Transform documents into bigrams and trigrams
@@ -140,7 +111,7 @@ class NlpPreProcess(object):
         ]
         return bigram_trigram_docs
     
-    def lemmatization(self, text, allowed_postags= ['NOUN', 'PROPN', 'ADJ', 'VERB']):
+    def lemmatization(self, text, allowed_postags=['NOUN', 'ADJ', 'VERB']):
         '''Lemmatize and filter tokens by part-of-speech'''
         texts_out = []
         doc = self.nlp(text)        
@@ -148,57 +119,62 @@ class NlpPreProcess(object):
         texts_out.append([token.lemma_ for token in doc if token.pos_ in allowed_postags])
         return texts_out[0]  # Return flat list of lemmatized tokens
 
+    def lemmatize_texts(self, texts):
+        """Lemmatize a batch of texts for better performance."""
+        lemmatized_texts = []
+        for doc in self.nlp.pipe(texts, batch_size=50, disable=["ner", "parser"]):
+            lemmatized_texts.append([token.lemma_ for token in doc if token.pos_ in ['NOUN', 'ADJ', 'VERB']])
+        return lemmatized_texts
+
     def remove_stopwords(self, tokens):
         '''Remove stopwords from tokenized words'''
         # Ensure stopwords and tokens are all lowercase and stripped of spaces
-        self.stoplist = {word.strip() for word in self.stoplist}  # Normalize stoplist
+        self.stoplist = {word.strip().lower() for word in self.stoplist}  # Normalize stoplist
         return [word for word in tokens if isinstance(word, str) and word.lower() not in self.stoplist]
 
     def remove_punct_and_digits(self, text):
         '''Remove punctuation and digits using regular expressions'''
-        punctuation = string.punctuation.replace('-', '')
         text = re.sub(r'[{}]'.format(string.punctuation), ' ', text)  # Remove punctuation
         text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
         text = re.sub(r'\d+', '', text)  # Remove digits
         return text.strip()  # Trim any leading/trailing spaces
     
-    def lemmatization_batch(self, texts, allowed_postags= ['NOUN', 'PROPN', 'ADJ', 'VERB']):
-        '''Lemmatize and filter tokens by part-of-speech in batches'''
-        texts_out = []
-        # Process texts in batches
-        for doc in self.nlp.pipe(texts, batch_size=1000, n_process=8):
-            lemmas = [token.lemma_ for token in doc if token.pos_ in allowed_postags]
-            texts_out.append(lemmas)
-        return texts_out
-
     def preprocess_file(self, df, col):
         '''Preprocess the file: remove punctuation, digits, stopwords, lemmatize, and create n-grams'''
         stime = datetime.now()
         df[col] = df[col].astype(str)
-
+        # Step 0: Final deduplication
+        df = df.drop_duplicates(subset=col).reset_index(drop=True)
+        print(f"Final deduplication completed in {datetime.now() - stime}")
+        
         # Step 1: Remove punctuation and digits
         df[col] = df[col].progress_apply(self.remove_punct_and_digits)
         print(f"Step 1 completed in {datetime.now() - stime}")
         print(df.loc[1, col])
         # Step 2: Tokenize into words
-        df[col] = df[col].progress_apply(nltk.word_tokenize)
+        # df[col] = df[col].progress_apply(nltk.word_tokenize)
+        df[col] = df[col].progress_apply(lambda x: [token.text for token in self.nlp(x) if not token.is_space])
         print(f"Step 2 completed in {datetime.now() - stime}")
         print(df.loc[1, col])
-
-        # Step 3: Apply lemmatization
-        df[col] = df[col].progress_apply(lambda x: self.lemmatization_batch(' '.join(x)))
+        # Step 3: Remove stopwords
+        df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x)
+        # print(f"Step 3 completed in {datetime.now() - stime}")   
+        # print(df.loc[1, col]) 
+        # Step 4: Apply lemmatization
+        df[col] = df[col].progress_apply(lambda x: self.lemmatization(' '.join(x)))
         print(f"Step 4 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
-        # Step 4: Create bigrams and trigrams
-        # df[col] = pd.Series(self.smart_ngrams(df[col].tolist()))
-        # print(f"Step 5 completed in {datetime.now() - stime}")
-        # print(df.loc[1, col]) 
-        # Step 5: Remove stopwords from bigrams and trigrams
-        df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x and len(str(x)) >= 2)
+        # Step 5: Create bigrams and trigrams
+        df[col] = pd.Series(self.smart_ngrams(df[col].tolist(), gl.MIN_COUNT, gl.THRESHOLD))
+        print(f"Step 5 completed in {datetime.now() - stime}")
+        print(df.loc[1, col]) 
+        # Step 6: Remove stopwords from bigrams and trigrams
+        # df[col] = df[col].progress_apply(lambda x: self.remove_stopwords(x) if isinstance(x, list) else x and len(str(x)) >= 2)
         print(f"Step 6 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
-        # Step 6: Rejoin tokenized words into a string
+        # Step 7: Rejoin tokenized words into a string
         df[col] = df[col].progress_apply(lambda x: ' '.join(x) if isinstance(x, list) else str(x))
+    
 
         print(f"Step 7 completed in {datetime.now() - stime}")
         print(df.loc[1, col]) 
