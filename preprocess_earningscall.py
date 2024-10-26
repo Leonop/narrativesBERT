@@ -9,6 +9,7 @@ import json
 import re
 import os
 import string
+import numpy as np
 # import nltk
 import spacy
 import torch
@@ -138,7 +139,7 @@ class NlpPreProcess(object):
         text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
         text = re.sub(r'\d+', '', text)  # Remove digits
         return text.strip()  # Trim any leading/trailing spaces
-    
+
     def preprocess_file(self, df, col):
         '''Preprocess the file: remove punctuation, digits, stopwords, lemmatize, and create n-grams'''
         stime = datetime.now()

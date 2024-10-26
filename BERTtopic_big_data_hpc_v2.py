@@ -47,7 +47,6 @@ class BERTopicGPU(object):
             use_idf=True,             # Enable inverse document frequency reweighting
             smooth_idf=True           # Smooth IDF weights by adding one to document frequencies
         )
-        
         self.representation_model = {
                 "KeyBERT": KeyBERTInspired(),
                 "MMR": MaximalMarginalRelevance(diversity=0.3),
@@ -83,6 +82,8 @@ class BERTopicGPU(object):
             filtered_chunk = filtered_chunk.reset_index()
             filtered_chunk = filtered_chunk.sort_values(by='isdelayed_flag', ascending=False).drop_duplicates(subset=gl.UNIQUE_KEYS, keep='first')
             meta = pd.concat([meta, filtered_chunk], ignore_index=True)       
+        meta['date'] = pd.to_datetime(meta['mostimportantdateutc'])
+        meta['quarter'] = meta['date'].dt.quarter
         return meta
 
     def pre_process_text(self, data):
@@ -140,8 +141,7 @@ class BERTopicGPU(object):
         batch_embed = embedding_model.encode(batch, device= self.device)
         return batch_embed, i, i_end
     
-    def Bertopic_run(self, docs):
- 
+    def Bertopic_run(self, docs): 
         # Initialize an empty array for embeddings
         embeddings = np.zeros((len(docs), self.embedding_model.get_sentence_embedding_dimension()))
         
@@ -180,7 +180,7 @@ class BERTopicGPU(object):
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
-        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}"))
+        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}"))
         return topic_model
     
 
@@ -194,15 +194,15 @@ class BERTopicGPU(object):
                     
     def save_figures(self, topic_model):
         # Save the visualization
-        visualization_path = os.path.join(gl.output_fig_folder, f'bertopic{gl.num_topic_to_plot}.pdf')
+        visualization_path = os.path.join(gl.output_fig_folder, f'bertopic{gl.num_topic_to_plot}_{gl.START_YEAR}.pdf')
         fig = topic_model.visualize_barchart(top_n_topics=gl.num_topic_to_plot)
         fig.write_image(visualization_path)
         fig1 = topic_model.visualize_topics()
-        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.NROWS}.pdf'))
+        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.NROWS}_{gl.START_YEAR}.pdf'))
         fig2 = topic_model.visualize_heatmap()
-        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.NROWS}.pdf'))
+        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.NROWS}_{gl.START_YEAR}.pdf'))
         fig3 = topic_model.visualize_hierarchy()
-        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}.pdf'))
+        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}_{gl.START_YEAR}.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
     def load_doc(self, path):
@@ -215,7 +215,7 @@ class BERTopicGPU(object):
         topic_info = topic_model.get_topic_info()
         num_topic = len(topic_info)
         # save the topic information to csv file
-        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}.csv")
+        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}.csv")
         topic_info.to_csv(TOPIC_INFO_path, index=False)
         
 

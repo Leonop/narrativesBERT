@@ -15,3 +15,11 @@ For the clustering step, we utilized HDBSCAN (Hierarchical Density-Based Spatial
 Finally, the topics were represented using a set of keywords derived from a custom TF-IDF vectorizer. The vectorizer was configured with max_df=0.8, min_df=2, and ngram_range=(1, 1) to emphasize unigrams while preventing the inclusion of overly frequent or rare terms. The output consisted of coherent topic representations, each described by 20 representative keywords, which provided insights into the thematic structures present within the corpus. To further refine the results, we manually merged similar topics to reduce redundancy and increase interpretability.
 
 Overall, BERTopic's integration of transformer-based embeddings, dimensionality reduction, and density-based clustering allowed us to extract coherent and meaningful topics, enabling a detailed exploration of the latent themes within the dataset.
+
+/home/zc_research/
+│
+├── TAD/
+│   └── create_input.py
+├── narrativesBERT/
+│   ├── __init__.py
+│   └── BERTopic_big_data_hpc_v2.py
