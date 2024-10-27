@@ -141,7 +141,9 @@ class BERTopicGPU(object):
         return batch_embed, i, i_end
     
     def Bertopic_run(self, docs):
- 
+        print("numpy imported:", 'np' in globals())
+        print(type(docs))
+        print(len(docs))
         # Initialize an empty array for embeddings
         embeddings = np.zeros((len(docs), self.embedding_model.get_sentence_embedding_dimension()))
         
@@ -160,13 +162,24 @@ class BERTopicGPU(object):
         
         print(f"Embeddings shape: {embeddings.shape}")
         print(f"Number of training documents: {len(docs)}")
-            
+        # Add these debug prints in both environments
+        print("Local/Cloud Environment Check:")
+        print("Embeddings type:", type(embeddings))
+        print("Embeddings shape:", embeddings.shape)
+        print("Embeddings dtype:", embeddings.dtype)
+        print("Number of documents:", len(docs))
+        print("SEED_TOPICS length:", len(gl.SEED_TOPICS))
+        print("Sample SEED_TOPICS shape:", [len(topic) for topic in gl.SEED_TOPICS[:3]])
+
+        # Check for NaN or infinite values
+        print("Has NaN:", np.isnan(embeddings).any())
+        print("Has Inf:", np.isinf(embeddings).any())    
         # Fit BERTopic with precomputed embeddings and models
         topic_model = BERTopic(
             embedding_model=self.embedding_model,
             umap_model=self.umap_model,
-            hdbscan_model = self.hdbscan_model,  # You are using KMeans here, not HDBSCAN, which is fine
-            vectorizer_model=self.vectorizer,
+            hdbscan_model = self.hdbscan_model,  
+            vectorizer_model = self.vectorizer,
             calculate_probabilities=True,
             top_n_words=gl.TOP_N_WORDS[0],
             verbose=True,

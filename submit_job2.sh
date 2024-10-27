@@ -17,4 +17,5 @@ conda activate bertopic2-el7-24.3.0
 python -m spacy download en_core_web_sm
 pip install -U kaleido
 cd ~/Research/narrativesBERT/
-python BERTtopic_big_data_hpc_v2.py
+pip list | grep -E "bertopic|numpy|torch|transformers"
+python BERTtopic_big_data_hpc_v3.py

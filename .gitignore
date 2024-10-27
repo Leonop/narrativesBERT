@@ -4,6 +4,7 @@ bertopic_env
 model/*
 output/*
 cuda_env/*
+conda_env/*
 requirements.txt
 my_gpu_job.out
 my_gpu_job.err

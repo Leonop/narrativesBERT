@@ -1,5 +1,5 @@
 # Author: Zicheng Xiao
-# Date: 2023-09-01
+# Date: 2024-09-01
 # Description: This script is used to preprocess the earnings call data.
 # The data is stored in the data folder, and the preprocessed data is stored in the docword folder.
 
