@@ -20,11 +20,11 @@ TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
 MODEL_SELECTION_RESULTS = os.path.join(output_folder, "model_selection_results.csv")
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-START_ROWS = 2000000 # start row to read from the csv file
-NROWS = 10000000 # number of rows to read from the csv file
+START_ROWS = 4000000 # start row to read from the csv file
+NROWS = 15000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
-YEAR_FILTER = 2013 # train the model on data from start year to this year
-START_YEAR = 2010 # start year of the data
+YEAR_FILTER = 2017 # train the model on data from start year to this year
+START_YEAR = 2014 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
 BATCH_SIZE = 1000
 

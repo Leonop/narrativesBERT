@@ -193,7 +193,7 @@ class BERTopicGPU(object):
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
-        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}"))
+        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}"))
         return topic_model
     
 
@@ -228,7 +228,7 @@ class BERTopicGPU(object):
         topic_info = topic_model.get_topic_info()
         num_topic = len(topic_info)
         # save the topic information to csv file
-        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}.csv")
+        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.csv")
         topic_info.to_csv(TOPIC_INFO_path, index=False)
         
 
@@ -236,7 +236,7 @@ class BERTopicGPU(object):
     
 if __name__ == "__main__":
     bt = BERTopicGPU()
-    docs_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
+    docs_path = os.path.join(gl.output_folder, f'preprocessed_docs_{gl.START_YEAR}_{gl.YEAR_FILTER}.txt')
     # if the processed doc file is exist, please load it
     print(docs_path)
     if os.path.exists(docs_path):
