@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import os
-import global_options as gl
+import global_options_10yrs as gl
 from preprocess_earningscall import NlpPreProcess
 import warnings
 from sentence_transformers import SentenceTransformer
@@ -33,7 +33,7 @@ class BERTopicGPU(object):
         # Initialize the embedding model
         self.embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cuda')
         # Dimensionality Reduction with UMAP (GPU version from cuML)
-        self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
+        self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True, low_memory=True, n_jobs = -1)
         # Clustering with MiniBatchKMeans
         # self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
         self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES[0], min_cluster_size=gl.MIN_CLUSTER_SIZE[0], prediction_data=True)
@@ -139,6 +139,11 @@ class BERTopicGPU(object):
         batch = docs[i:i_end]
         batch_embed = embedding_model.encode(batch, device= self.device)
         return batch_embed, i, i_end
+
+    def print_gpu_memory(self):
+        if torch.cuda.is_available():
+            print(f"GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+            print(f"GPU memory cached: {torch.cuda.memory_reserved()/1e9:.2f} GB")
     
     def Bertopic_run(self, docs):
         print("numpy imported:", 'np' in globals())
@@ -175,6 +180,9 @@ class BERTopicGPU(object):
         print("Has NaN:", np.isnan(embeddings).any())
         print("Has Inf:", np.isinf(embeddings).any())    
         # Fit BERTopic with precomputed embeddings and models
+        # Use in your code
+        self.print_gpu_memory()  # Before UMAP
+
         topic_model = BERTopic(
             embedding_model=self.embedding_model,
             umap_model=self.umap_model,
@@ -193,6 +201,7 @@ class BERTopicGPU(object):
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
+        self.print_gpu_memory()  # After UMAP
         topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}"))
         return topic_model
     
