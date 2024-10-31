@@ -35,7 +35,6 @@ class BERTopicGPU(object):
         # Dimensionality Reduction with UMAP (GPU version from cuML)
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True)
         # Clustering with MiniBatchKMeans
-        # self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
         self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES[0], min_cluster_size=gl.MIN_CLUSTER_SIZE[0], prediction_data=True)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         # Initialize TfidfVectorizer with desired parameters
@@ -180,7 +179,7 @@ class BERTopicGPU(object):
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
-        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}"))
+        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}"))
         return topic_model
     
 
@@ -194,15 +193,15 @@ class BERTopicGPU(object):
                     
     def save_figures(self, topic_model):
         # Save the visualization
-        visualization_path = os.path.join(gl.output_fig_folder, f'bertopic{gl.num_topic_to_plot}_{gl.START_YEAR}.pdf')
+        visualization_path = os.path.join(gl.output_fig_folder, f'bertopic{gl.num_topic_to_plot}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf')
         fig = topic_model.visualize_barchart(top_n_topics=gl.num_topic_to_plot)
         fig.write_image(visualization_path)
         fig1 = topic_model.visualize_topics()
-        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.NROWS}_{gl.START_YEAR}.pdf'))
+        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.NROWS}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
         fig2 = topic_model.visualize_heatmap()
-        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.NROWS}_{gl.START_YEAR}.pdf'))
+        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.NROWS}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
         fig3 = topic_model.visualize_hierarchy()
-        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}_{gl.START_YEAR}.pdf'))
+        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
     def load_doc(self, path):
@@ -215,7 +214,7 @@ class BERTopicGPU(object):
         topic_info = topic_model.get_topic_info()
         num_topic = len(topic_info)
         # save the topic information to csv file
-        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}.csv")
+        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.csv")
         topic_info.to_csv(TOPIC_INFO_path, index=False)
         
 
