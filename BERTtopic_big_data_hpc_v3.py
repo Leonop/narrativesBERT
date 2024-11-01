@@ -8,12 +8,14 @@ import warnings
 from sentence_transformers import SentenceTransformer
 import collections
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
-from cuml.manifold import UMAP
+# from cuml.manifold import UMAP
 from cuml.cluster import HDBSCAN
+from umap import UMAP  # Import from umap-learn, not cuml
 from bertopic import BERTopic
 from sklearn.cluster import MiniBatchKMeans
 # from model_selection_hpc import vectorize_doc
 import torch
+torch.cuda.empty_cache()
 from sklearn.model_selection import KFold
 from sklearn.metrics import silhouette_score
 from gensim.models.coherencemodel import CoherenceModel
@@ -22,6 +24,7 @@ from visualize_topic_models import VisualizeTopics as vt
 import itertools
 from matplotlib import pyplot as plt
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, PartOfSpeech
+from multiprocessing import Pool, cpu_count
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
@@ -227,10 +230,40 @@ class BERTopicGPU(object):
         fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
-    def load_doc(self, path):
-        # load the doc from a txt file to a list
+    # def load_doc(self, path):
+    #     # load the doc from a txt file to a list
+    #     with open(path, 'r') as f:
+    #         return f.readlines()
+        
+    def load_doc_chunk(self, chunk_start, chunk_size, path):
+        """Load a specific chunk of the document."""
         with open(path, 'r') as f:
-            return f.readlines()
+            f.seek(chunk_start)  # Move to the start of the chunk
+            lines = f.read(chunk_size).splitlines()
+        return lines
+
+    def chunkify_file(self, path, num_chunks=cpu_count()):
+        """Determine file chunks for multiprocessing."""
+        with open(path, 'r') as f:
+            f.seek(0, 2)  # Move to the end of the file
+            file_size = f.tell()
+            chunk_size = file_size // num_chunks
+        
+        chunk_starts = [i * chunk_size for i in range(num_chunks)]
+        return chunk_starts, chunk_size
+
+    def load_doc_parallel(self, path):
+        """Load the doc from a txt file to a list using multiple processes."""
+        num_chunks = cpu_count()
+        chunk_starts, chunk_size = self.chunkify_file(path, num_chunks)
+
+        with Pool(num_chunks) as pool:
+            docs = pool.starmap(self.load_doc_chunk, [(start, chunk_size, path) for start in chunk_starts])
+        
+        # Flatten the list of lists into a single list
+        docs = [line for chunk in docs for line in chunk]
+        return docs
+
         
     def save_topic_keywords(self, topic_model):
         # Get topic information and save
@@ -250,7 +283,7 @@ if __name__ == "__main__":
     print(docs_path)
     if os.path.exists(docs_path):
         print("Reading preprocessed docs from preprocessed_docs.txt")
-        docs = bt.load_doc(docs_path)
+        docs = bt.load_doc_parallel(docs_path)
         docs = list(set(docs))
     else:
         meta = bt.load_data()
