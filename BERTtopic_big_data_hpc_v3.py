@@ -9,7 +9,8 @@ from sentence_transformers import SentenceTransformer
 import collections
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 # from cuml.manifold import UMAP
-from cuml.cluster import HDBSCAN
+# from cuml.cluster import HDBSCAN
+from hdbscan import HDBSCAN
 from umap import UMAP  # Import from umap-learn, not cuml
 from bertopic import BERTopic
 from sklearn.cluster import MiniBatchKMeans
@@ -25,11 +26,14 @@ import itertools
 from matplotlib import pyplot as plt
 from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, PartOfSpeech
 from multiprocessing import Pool, cpu_count
+from sklearn.decomposition import PCA
+import joblib
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
 file_path = os.path.join(current_path, 'data', 'earnings_calls_20231017.csv')
 tqdm.pandas()
+joblib.Parallel(n_jobs=1)
 
 class BERTopicGPU(object):
     def __init__(self):
@@ -39,7 +43,7 @@ class BERTopicGPU(object):
         self.umap_model = UMAP(n_components=gl.N_COMPONENTS[0], n_neighbors=gl.N_NEIGHBORS[0], random_state=42, metric=gl.METRIC[0], verbose=True, low_memory=True, n_jobs = -1)
         # Clustering with MiniBatchKMeans
         # self.cluster_model = MiniBatchKMeans(n_clusters=gl.N_TOPICS[0], random_state=0)
-        self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES[0], min_cluster_size=gl.MIN_CLUSTER_SIZE[0], prediction_data=True)
+        self.hdbscan_model = HDBSCAN(min_samples=gl.MIN_SAMPLES[0], min_cluster_size=gl.MIN_CLUSTER_SIZE[0], prediction_data=True, core_dist_n_jobs=1)
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         # Initialize TfidfVectorizer with desired parameters
         self.vectorizer = TfidfVectorizer(
@@ -147,6 +151,7 @@ class BERTopicGPU(object):
         if torch.cuda.is_available():
             print(f"GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f} GB")
             print(f"GPU memory cached: {torch.cuda.memory_reserved()/1e9:.2f} GB")
+            os.system("nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv")
     
     def Bertopic_run(self, docs):
         print("numpy imported:", 'np' in globals())
@@ -185,6 +190,7 @@ class BERTopicGPU(object):
         # Fit BERTopic with precomputed embeddings and models
         # Use in your code
         self.print_gpu_memory()  # Before UMAP
+        reduced_embeddings = self.reduce_dimensionality(embeddings, n_components=50)
 
         topic_model = BERTopic(
             embedding_model=self.embedding_model,
@@ -200,7 +206,7 @@ class BERTopicGPU(object):
         )
         try:
             # Fit the model and check for any issues
-            topic_model.fit(docs, embeddings=embeddings)
+            topic_model.fit(docs, embeddings=reduced_embeddings)
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
@@ -234,6 +240,11 @@ class BERTopicGPU(object):
     #     # load the doc from a txt file to a list
     #     with open(path, 'r') as f:
     #         return f.readlines()
+    def reduce_dimensionality(self, embeddings, n_components=50):
+        pca = PCA(n_components=n_components)
+        reduced_embeddings = pca.fit_transform(embeddings)
+        print(f"Reduced embeddings shape: {reduced_embeddings.shape}")
+        return reduced_embeddings
         
     def load_doc_chunk(self, chunk_start, chunk_size, path):
         """Load a specific chunk of the document."""

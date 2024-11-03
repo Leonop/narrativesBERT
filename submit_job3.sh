@@ -25,7 +25,7 @@ conda activate bertopic_env
 # pip install sentence-transformers==2.2.2
 # pip install huggingface-hub==0.23.2
 # pip install bertopic==0.16.3 gensim==4.3.3 nltk==3.9.1 plotly==5.24.1
-
+pip install joblib==1.2.0
 # module load cuda/11.8
 # conda install -c rapidsai -c nvidia -c conda-forge cudatoolkit=11.8.0 cudf=23.04.01 cuml=23.04.01 dask-cudf=23.04.01 cuda-python=11.8.2
 # conda install -c conda-forge numpy=1.23.5 pandas=1.5.3 scipy=1.10.1 numba=0.56.4

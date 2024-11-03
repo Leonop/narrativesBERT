@@ -32,11 +32,11 @@ START_YEAR = 2010 # start year of the data
 BATCH_SIZE = 500
 
 # create a list of parameters to search over using GridSearchCV
-N_NEIGHBORS = [28] # Number of Neighbors in UMAP, the higher number requires more computational power
-N_COMPONENTS = [8] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
+N_NEIGHBORS = [20] # Number of Neighbors in UMAP, the higher number requires more computational power
+N_COMPONENTS = [6] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
 MIN_DIST = [0.0] # Lower value will make the topic more distinct from each other
 MIN_SAMPLES = [20] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
-MIN_CLUSTER_SIZE = [40] # A large value will lead to larger, more stable clusters, but fewer clusters.
+MIN_CLUSTER_SIZE = [36] # A large value will lead to larger, more stable clusters, but fewer clusters.
 N_TOPICS = [100] # Number of Topics in Topic Model
 TOP_N_WORDS = [20] # Number of Top Words in Topic Model
 METRIC = ['cosine']
