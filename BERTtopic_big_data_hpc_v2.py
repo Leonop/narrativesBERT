@@ -218,8 +218,6 @@ class BERTopicGPU(object):
         topic_info.to_csv(TOPIC_INFO_path, index=False)
         
 
-
-    
 if __name__ == "__main__":
     bt = BERTopicGPU()
     docs_path = os.path.join(gl.output_folder, 'preprocessed_docs.txt')
