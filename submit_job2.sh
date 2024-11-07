@@ -18,4 +18,4 @@ python -m spacy download en_core_web_sm
 pip install -U kaleido
 cd ~/Research/narrativesBERT/
 pip list | grep -E "bertopic|numpy|torch|transformers"
-python BERTtopic_big_data_hpc_v3.py
+python BERTtopic_big_data_hpc_v2.py

@@ -20,11 +20,11 @@ TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
 MODEL_SELECTION_RESULTS = os.path.join(output_folder, "model_selection_results.csv")
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-START_ROWS = 4000000 # start row to read from the csv file
-NROWS = 15000000 # number of rows to read from the csv file
+START_ROWS = 0 # start row to read from the csv file
+NROWS = 10000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
-YEAR_FILTER = 2020 # train the model on data from start year to this year
-START_YEAR = 2010 # start year of the data
+YEAR_FILTER = 2010 # train the model on data from start year to this year
+START_YEAR = 2005 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
 BATCH_SIZE = 1000
 
@@ -33,7 +33,7 @@ N_NEIGHBORS = [28] # Number of Neighbors in UMAP, the higher number requires mor
 N_COMPONENTS = [9] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
 MIN_DIST = [0.0] # Lower value will make the topic more distinct from each other
 MIN_SAMPLES = [15] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
-MIN_CLUSTER_SIZE = [35] # A large value will lead to larger, more stable clusters, but fewer clusters.
+MIN_CLUSTER_SIZE = [40] # A large value will lead to larger, more stable clusters, but fewer clusters.
 N_TOPICS = [100] # Number of Topics in Topic Model
 TOP_N_WORDS = [20] # Number of Top Words in Topic Model
 METRIC = ['cosine']
@@ -42,28 +42,27 @@ MAX_DF = [0.95] # remove the top 15% of the most frequent words
 MIN_DF = [5] # eliminate very rare words
 MIN_COUNT = 2 # SMART_N_GRAM minimum number of times a word must appear in the corpus to be included in the vocabulary
 THRESHOLD = 5 # SMART_N_GRAM
-NR_TOPICS = [250] # Number of Topics in Topic Model
+NR_TOPICS = [100] # Number of Topics in Topic Model
 
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
 
 
 SEED_TOPICS = [["revenue", "income statement", "sales", "top-line", "total revenue" ],
-    ["growth", "expansion", "increase", "rise", "escalation"],
+    ["growth", "expansion", "increase", "rise", "escalation", "year over year", "quarter over quarter", "YOY", "QOQ"],
     ["profit", "net income", "bottom-line", "earnings", "net profit"],
     ["cost", "expenses", "expenditure", "overhead", "costs"],
     ["cash", "cash flow", "liquidity", "cash position", "cash balance"],
     ["debt", "liabilities", "borrowing", "indebtedness", "debt burden"],
     ["equity", "shareholders", "stockholders", "ownership", "equity holders"],
     ["investment", "investing", "capital expenditure", "capex", "investment spending"],
-    ["dividend", "dividend payment", "dividend yield", "dividend payout", "dividend policy"],
+    ["dividend", "dividend payment", "dividend yield", "dividend payout", "dividend policy", "Dividend policy", "payout policy", "shareholder distributions", "dividend strategy", "income distribution plan", "yield policy"],
     ["financial position", "balance sheet", "financial health", "financial stability", "financial standing"],
     ["liquidity", "liquid assets", "current assets", "quick ratio", "current ratio"],
     ["gross margin", "profit ratio", "markup percentage", "gross profit rate", "sales margin"],
     ["operating profit margin", "EBIT margin", "operating income margin", "profit margin", "operational efficiency"],
     ["cash balance", "cash burn rate", "cash convertion cycle", "cash flow", "cash generation", "cash position"],
-    ["return on equity", "equity returns", "shareholder return", "net income to equity", "equity performance", "profitability ratio"],
-    ["return on assets", "asset returns", "asset performance", "net income to assets", "asset profitability"],
+    ["return on equity", "equity returns", "shareholder return", "net income to equity", "equity performance", "profitability ratio", "return on assets", "asset returns", "asset performance", "net income to assets", "asset profitability"],
     ["return on investment", "investment returns", "investment performance", "net income to investment", "investment profitability"],
     ["automation", "capacity utilization", "cost cutting", "cost efficiency", "cost reduction", "cost saving", "digital transformation", "efficiency", "labor cost", "labor efficiency", "labor layoff", "labor productivity", "labour cost", "labour efficiency", "labour layoff", "labour productivity", "laid off", "lay off"],
     ["allowance", "write-off", "impairment charge", "asset impairment", "goodwill impairment"],
@@ -107,12 +106,11 @@ SEED_TOPICS = [["revenue", "income statement", "sales", "top-line", "total reven
     ["New product launches", "product releases", "new offerings", "product introductions", "market debuts", "new solutions"],
     ["Product mix changes", "product portfolio shifts", "offering diversification", "product line adjustments", "sales mix"],
     ["Service quality", "customer satisfaction measures", "service performance indicators", "quality assurance metrics", "service level achievements", "customer experience scores"],
-    ["research_and_development", "R&D spending", "innovation funding", "product development costs", "research expenditure", "technology investments"],
-    ["innovation_pipeline", "future products", "development roadmap", "upcoming innovations", "product incubation", "new concept funnel"],
+    ["research_and_development", "R&D spending", "innovation funding", "product development costs", "research expenditure", "technology investments","innovation_pipeline", "future products", "development roadmap", "upcoming innovations", "product incubation", "new concept funnel"],
     ["product_roadmap", "development timeline", "product strategy", "future releases", "product evolution plan", "feature roadmap"],
     ["Cost-cutting initiatives", "expense reduction", "efficiency programs", "cost optimization", "savings measures", "budget trimming", "cost control", "cost cutting",
     "cost efficiency", "cost management", "cost minimization", "cost optimization", "cost reduction", "cost saving", "decrease in investment", "digital transformation", 
-    "direction", "downsize", "efficien", "execution", "exit unattractive", "expenditure reduction", "expense control", "expense management", "expense reduction", "focus", 
+    "direction", "downsize", "efficient", "execution", "exit unattractive", "expenditure reduction", "expense control", "expense management", "expense reduction", "focus", 
     "lower spend", "operating margin", "outsource", "overhead reduction", "production cost", "reduce cost", "reduce expenditure", "reduce expense", "reduce investment", 
     "reduce marketing", "reduce overhead", "reduce R&D", "reduce SG&A", "reduce spending", "reducing capital expenditure", "restruct", "restructuring cost", "roadmap", 
     "robotic process automation", "RPA", "spend control", "streamlin", "supply chain optimization", "utilization"],
@@ -128,7 +126,6 @@ SEED_TOPICS = [["revenue", "income statement", "sales", "top-line", "total reven
     "share repurchase", "short-term debt", "stock buyback", "stock repurchase", "strategic acquisition", "strategic alliance", "strategic investment", "strategic merger", "strategic partnership", "WACC", 
     "weighted average cost of capital", "Debt-to-equity ratio", "leverage ratio", "capital structure", "financial leverage", "gearing ratio", "debt-to-capital ratio"],
     ["Share buyback plans", "stock repurchase program", "share repurchases", "buyback initiative", "stock retirement", "equity reduction"],
-    ["Dividend policy", "payout policy", "shareholder distributions", "dividend strategy", "income distribution plan", "yield policy"],
     ["Capital expenditure plans", "Capex projections", "investment plans", "asset acquisition strategy", "infrastructure spending", "capital outlays"],
     ["Working capital management", "cash flow management", "liquidity management", "short-term asset management", "operational liquidity", "current asset efficiency"],
     ["Geographic expansion", "market entry", "territorial growth", "global reach expansion", "new market penetration", "regional diversification"],
@@ -221,22 +218,22 @@ SEED_TOPICS = [["revenue", "income statement", "sales", "top-line", "total reven
     "innovation", "innovative approach", "innovative business", "innovative manner", "innovative product", "innovative service", "innovative solution", "innovative technology", "market demand", "market supply", "market trend",
     "PPI", "price competition", "price trend", "price war", "price", "producer price index", "product innovation", "R&D", "subsidy war", "supply chain", "supply-chain", "sustainability", "technology development", "technology innovation", "technology trends"],
     ["political risk", "risk", "uncertainty", "volatility", "risk factors", "risk management", "a government",
-    "a political", "a president", "a yes", "african americans", "american political", "and congress", "and party", "and political", "and senate", "and social", "any state",
-    "argued that", "care reform", "civil service", "civil war", "clause of", "congress the", "congress to", "congress", "constitution and", "court has", "due process", "economic policy",
+    "a political", "a president", "a yes", "african americans", "american political", "congress", "party", "political", "senate", "social", "state",
+    "argued", "reform", "civil service", "civil war", "clause", "congress", "congress", "congress", "constitution", "court", "due process", "economic policy",
     "elected officials", "executive branch", "executive privilege", "federal bureaucracy", "federal courts", "federal reserve", "first amendment", "for governor", "free market", "general election", 
-    "geopolitical attention", "geopolitical change", "geopolitical policy", "geopolitical reform", "geopolitical risk", "geopolitical uncertainty", "government and", "government contract", "government in", 
-    "government is 1", "government policy", "government the", "governor and", "governor in", "groups and", "in congress", "in government", "interest group", "interest groups", "islamic state", "judicial review", 
-    "law suit", "legal risk", "legal uncertainty", "limits on", "most americans", "national and", "national government", "national security", "NATO", "of citizens", "of civil", "of government", "of politics", "of religion",
-    "of representatives", "of social", "of speech", "office of", "other nations", "passed by", "public policy", "political risk", "political uncertainty", "policy goals", "policy is", "policy", "political parties",
-    "political party", "political process", "political system", "politics and", "politics is", "politics of", "powers and", "president has", "president obama", "proposed by", "public opinion", "regulatory change", "regulatory environment",
-    "regulatory policy", "regulatory reform", "regulatory risk", "regulatory uncertainty", "ruled that", "sanction", "senate and", "shall have", "shall not", "social policy", "state the", "states or", "struck down",
-    "support for", "tax risk", "tax tariff", "tea party", "that congress", "the bureaucracy", "the campaign", "the candidates", "the civil", "the congress", "the constitution", "the constitutional", "the democratic", "the electoral", 
-    "the epa", "the faa", "the gop", "the governments", "the house", "the islamic", "the legislative", "the legislature", "the nation", "the partys", "the political", "the politics", "the presidency", "the presidential", "the republican", 
-    "the south 1", "the states", "the taliban", "the va", "this election", "to enact", "vote for", "war risk", "war uncertainty", "war", "white house", "yes vote"],
+    "geopolitical attention", "geopolitical change", "geopolitical policy", "geopolitical reform", "geopolitical risk", "geopolitical uncertainty", "government", "government contract", "government", 
+    "government", "government policy", "government", "governor", "governor", "groups", "congress", "government", "interest group", "interest groups", "islamic state", "judicial review", 
+    "law suit", "legal risk", "legal uncertainty", "limits", "most americans", "national", "national government", "national security", "NATO", "citizens", "civil", "government", "politics", "religion",
+    "representatives", "social", "speech", "office", "other nations", "passed by", "public policy", "political risk", "political uncertainty", "policy goals", "policy", "policy", "political parties",
+    "political party", "political process", "political system", "politics", "politics of", "powers", "president", "president obama", "proposed", "public opinion", "regulatory change", "regulatory environment",
+    "regulatory policy", "regulatory reform", "regulatory risk", "regulatory uncertainty", "ruled that", "sanction", "senate and", "shall have", "shall not", "social policy", "state", "states", "struck down",
+    "support", "tax risk", "tax tariff", "tea party", "that congress", "bureaucracy", "campaign", "candidates", "civil", "congress", "constitution", "constitutional", "democratic", "electoral", 
+    "the epa", "the faa", "the gop", "the governments", "the house", "the islamic", "the legislative", "the legislature", "nation", "partys", "the presidency", "the presidential", "the republican", 
+    "the taliban", "the va", "election", "enact", "vote", "war risk", "war uncertainty", "war", "white house", "yes vote"],
     ["Macro Economic Risk", "macro trends", "economic influences", "market conditions", "financial environment", "economic climate", "economic risk",
     "economic uncertainty", "economic change", "economic reform", "economic policy", "economic environment", "economic slowdown", "economic recession", "economic contraction", "economic expansion", "economic growth", "economic recovery",
     "headwind", "financial risk", "market risk", "interest rate risk", "downturn", "slow down", "systematic risk", "bank run", "crisis", "macroeconomic", "market crush", "inflation", "deflation", "global recession", "fiscal policy", "monetary policy", "unemployment"],
-    ["liquidity risk", " liquidity risk", " liquidity uncertainty", "financial tightness", "financial constraint", "financial stress", "financial strain", "financial pressure", "financial difficulty", "solvency", "default", "capital adequacy", "credit crunch",
+    ["liquidity risk", " liquidity uncertainty", "financial tightness", "financial constraint", "financial stress", "financial strain", "financial pressure", "financial difficulty", "solvency", "default", "capital adequacy", "credit crunch",
     "credit rating", "credit risk", "counterparty risk", "stress test", "repo market", "interest coverage", "quick ratio", "current ratio", "collateral", "counterparty risk", "cash reserve", "bankruptcy"],
     ["sovereign risk", "american", "british", "china", "chinese", "european", "great britain", "iran", "israel", "north korea", "russia", "sovereign change", "sovereign credit rating", "sovereign credit risk",
     "sovereign debt", "sovereign default", "sovereign downgrade", "sovereign environment", "sovereign policy", "sovereign reform", "sovereign risk", "sovereign uncertainty", "the eu", "the uk", "the us", 

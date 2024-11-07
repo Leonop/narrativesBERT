@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import os
-import global_options_10yrs as gl
+import global_options as gl
 from preprocess_earningscall import NlpPreProcess
 import warnings
 from sentence_transformers import SentenceTransformer
@@ -190,7 +190,7 @@ class BERTopicGPU(object):
         # Fit BERTopic with precomputed embeddings and models
         # Use in your code
         self.print_gpu_memory()  # Before UMAP
-        reduced_embeddings = self.reduce_dimensionality(embeddings, n_components=50)
+        # reduced_embeddings = self.reduce_dimensionality(embeddings, n_components=50)
 
         topic_model = BERTopic(
             embedding_model=self.embedding_model,
@@ -206,7 +206,7 @@ class BERTopicGPU(object):
         )
         try:
             # Fit the model and check for any issues
-            topic_model.fit(docs, embeddings=reduced_embeddings)
+            topic_model.fit_transform(docs, embeddings=embeddings)
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
@@ -229,11 +229,11 @@ class BERTopicGPU(object):
         fig = topic_model.visualize_barchart(top_n_topics=gl.num_topic_to_plot)
         fig.write_image(visualization_path)
         fig1 = topic_model.visualize_topics()
-        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.NROWS}.pdf'))
+        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
         fig2 = topic_model.visualize_heatmap()
-        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.NROWS}.pdf'))
+        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
         fig3 = topic_model.visualize_hierarchy()
-        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}.pdf'))
+        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
     # def load_doc(self, path):

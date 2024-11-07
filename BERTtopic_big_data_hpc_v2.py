@@ -26,6 +26,7 @@ from gensim.corpora.dictionary import Dictionary
 from visualize_topic_models import VisualizeTopics as vt
 import itertools
 from matplotlib import pyplot as plt
+from multiprocessing import Pool, cpu_count
 
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
@@ -159,11 +160,11 @@ class BERTopicGPU(object):
             calculate_probabilities=True,
             verbose=True,
             min_topic_size=30,  # Minimum number of documents per topic
-            seed_topic_list=gl.SEED_WORDS,
+            seed_topic_list=gl.SEED_TOPICS,
         )
         try:
             # Fit the model and check for any issues
-            topics, prob = topic_model.fit(docs, embeddings=embeddings)
+            topics, prob = topic_model.fit_transform(docs, embeddings=embeddings)
         except ValueError as e:
             print(f"Error during BERTopic fitting: {e}")
             raise
@@ -272,26 +273,56 @@ class BERTopicGPU(object):
         fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.NROWS}.pdf'))
         print(f"Visualization saved to {visualization_path}")
 
-    def load_doc(self, path):
-        # load the doc from a txt file to a list
-        with open(path, 'r') as f:
-            return f.readlines()
+    # def load_doc(self, path):
+    #     # load the doc from a txt file to a list
+    #     with open(path, 'r') as f:
+    #         return f.readlines()
+        
     
+    def load_doc_chunk(self, chunk_start, chunk_size, path):
+        """Load a specific chunk of the document."""
+        with open(path, 'r') as f:
+            f.seek(chunk_start)  # Move to the start of the chunk
+            lines = f.read(chunk_size).splitlines()
+        return lines
+
+    def chunkify_file(self, path, num_chunks=cpu_count()):
+        """Determine file chunks for multiprocessing."""
+        with open(path, 'r') as f:
+            f.seek(0, 2)  # Move to the end of the file
+            file_size = f.tell()
+            chunk_size = file_size // num_chunks
+        
+        chunk_starts = [i * chunk_size for i in range(num_chunks)]
+        return chunk_starts, chunk_size
+
+    def load_doc_parallel(self, path):
+        """Load the doc from a txt file to a list using multiple processes."""
+        num_chunks = cpu_count()
+        chunk_starts, chunk_size = self.chunkify_file(path, num_chunks)
+
+        with Pool(num_chunks) as pool:
+            docs = pool.starmap(self.load_doc_chunk, [(start, chunk_size, path) for start in chunk_starts])
+        
+        # Flatten the list of lists into a single list
+        docs = [line for chunk in docs for line in chunk]
+        return docs
+    
+    def save_topic_keywords(self, topic_model):
+        # Get topic information and save
+        topic_info = topic_model.get_topic_info()
+        num_topic = len(topic_info)
+        # save the topic information to csv file
+        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.csv")
+        topic_info.to_csv(TOPIC_INFO_path, index=False)
+        
+
     def get_top_n_keywords(self, topic_model, topic_id, n=30):
         # Fetch the top n keywords for the topic
         keywords = topic_model.get_topic(topic_id)[:n]
         # Join the keywords into a single string for easy display
         return ', '.join([keyword for keyword, _ in keywords])
             
-    def save_topic_keywords(self, topic_model):
-        TOPIC_INFO_path = os.path.join(gl.output_folder, f'topic_keywords_{gl.NROWS[0]}.txt')
-        # save the keywords to a txt file
-        topic_info = topic_model.get_topic_info()
-        # Apply the function to get the top 30 keywords for each topic and store them in the 'Top_Keywords' column
-        topic_info['Top_Keywords'] = topic_info['Topic'].apply(lambda topic_id: self.get_top_n_keywords(topic_model, topic_id, n=30) if topic_id != -1 else '')
-        # save the topic information to csv file
-        topic_info.to_csv(TOPIC_INFO_path, index=False)
-        
     def finetune_bertopic(self, topics, probs, documents):
         # 1. Merge similar topics
         topic_model.merge_topics(documents, topics, probabilities=probs, threshold=0.7)
@@ -314,27 +345,26 @@ class BERTopicGPU(object):
 if __name__ == "__main__":
     bt = BERTopicGPU()
     meta = bt.load_data()
-    if gl.NROWS > 1000000:
-        n = gl.NROWS // 1000000
-        file_postfix = f'{n}M'
-    else:
-        file_postfix = f'{gl.NROWS}'
-    docs_path = os.path.join(gl.output_folder, f'preprocessed_docs_{file_postfix}.txt')
+    docs_path = os.path.join(gl.output_folder, f'preprocessed_docs_{gl.START_YEAR}_{gl.YEAR_FILTER}.txt')
     # if the processed doc file is exist, please load it
     if os.path.exists(docs_path):
-        docs = bt.load_doc(docs_path)
+        print("Reading preprocessed docs from preprocessed_docs.txt")
+        docs = bt.load_doc_parallel(docs_path)
+        docs = list(set(docs))
         print("Skipping the preprocessing!")
     else:
+        meta = bt.load_data()
         docs = bt.pre_process_text(meta)
         # save docs to a file
         bt.save_file(docs, docs_path, bar_length=100)
     # topic_model = bt.train_bert_topic_model_cv(docs, n_splits = 10)
     topic_model, prob = bt.Bertopic_run(docs)
     # save the model to model_path        
-    topic_model = bt.finetune_bertopic(topic_model, prob, docs)
+    bt.save_topic_keywords(topic_model)
+    # topic_model = bt.finetune_bertopic(topic_model, prob, docs)
         # if model_path is not exist, please create it
-    model_path = os.path.join(gl.output_folder, f'bertopic_model_{file_postfix}')
-    if not os.path.exists(model_path):
-        topic_model.save(model_path)
+    # model_path = os.path.join(gl.output_folder, f'bertopic_model_{file_postfix}')
+    # if not os.path.exists(model_path):
+    #     topic_model.save(model_path)
     bt.save_figures(topic_model)
     print("BERTopic model training completed.")
