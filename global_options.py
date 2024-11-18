@@ -23,14 +23,14 @@ TEXT_COLUMN = "componenttext" # the column in the main earnings call data that c
 START_ROWS = 0 # start row to read from the csv file
 NROWS = 10000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
-YEAR_FILTER = 2010 # train the model on data from start year to this year
-START_YEAR = 2005 # start year of the data
+YEAR_FILTER = 2013 # train the model on data from start year to this year
+START_YEAR = 2011 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
 BATCH_SIZE = 1000
 
 # create a list of parameters to search over using GridSearchCV
 N_NEIGHBORS = [28] # Number of Neighbors in UMAP, the higher number requires more computational power
-N_COMPONENTS = [9] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
+N_COMPONENTS = [6] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
 MIN_DIST = [0.0] # Lower value will make the topic more distinct from each other
 MIN_SAMPLES = [15] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
 MIN_CLUSTER_SIZE = [40] # A large value will lead to larger, more stable clusters, but fewer clusters.
