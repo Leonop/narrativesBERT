@@ -20,11 +20,11 @@ TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
 MODEL_SELECTION_RESULTS = os.path.join(output_folder, "model_selection_results.csv")
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-START_ROWS = 0 # start row to read from the csv file
-NROWS = 10000000 # number of rows to read from the csv file
+START_ROWS = 7000000 # start row to read from the csv file
+NROWS = 80000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
-YEAR_FILTER = 2013 # train the model on data from start year to this year
-START_YEAR = 2011 # start year of the data
+YEAR_FILTER = 2020 # train the model on data from start year to this year
+START_YEAR = 2019 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
 BATCH_SIZE = 1000
 
@@ -42,7 +42,7 @@ MAX_DF = [0.95] # remove the top 15% of the most frequent words
 MIN_DF = [5] # eliminate very rare words
 MIN_COUNT = 2 # SMART_N_GRAM minimum number of times a word must appear in the corpus to be included in the vocabulary
 THRESHOLD = 5 # SMART_N_GRAM
-NR_TOPICS = [100] # Number of Topics in Topic Model
+NR_TOPICS = [150] # Number of Topics in Topic Model
 
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
