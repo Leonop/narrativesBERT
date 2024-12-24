@@ -1,0 +1,490 @@
+import pandas as pd
+import numpy as np
+from tqdm import tqdm
+import os
+import global_options as gl
+from preprocess_earningscall import NlpPreProcess
+import warnings
+from sentence_transformers import SentenceTransformer
+import collections
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+# from cuml.manifold import UMAP
+# from cuml.cluster import HDBSCAN
+from hdbscan import HDBSCAN
+from umap import UMAP  # Import from umap-learn, not cuml
+from bertopic import BERTopic
+from sklearn.cluster import MiniBatchKMeans
+# from model_selection_hpc import vectorize_doc
+import torch
+torch.cuda.empty_cache()
+from sklearn.model_selection import KFold
+from sklearn.metrics import silhouette_score
+from gensim.models.coherencemodel import CoherenceModel
+from gensim.corpora.dictionary import Dictionary
+from visualize_topic_models import VisualizeTopics as vt
+import itertools
+from matplotlib import pyplot as plt
+from bertopic.representation import KeyBERTInspired, MaximalMarginalRelevance, PartOfSpeech
+from multiprocessing import Pool, cpu_count
+from sklearn.decomposition import PCA
+import joblib
+from sklearn.utils import Memory
+
+warnings.filterwarnings('ignore')
+current_path = os.getcwd()
+file_path = os.path.join(current_path, 'data', 'earnings_calls_20231017.csv')
+tqdm.pandas()
+joblib.Parallel(n_jobs=1)
+
+class BERTopicGPU(object):
+    def __init__(self):
+        # Increase batch size and optimize CUDA memory usage
+        torch.cuda.empty_cache()
+        torch.backends.cudnn.benchmark = True  # Enable cudnn autotuner
+        
+        # Initialize the embedding model with larger batch size
+        self.embedding_model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2', device='cuda')
+        self.embedding_model.max_seq_length = 512  # Increase max sequence length if needed
+        
+        # Optimize UMAP for GPU memory usage
+        self.umap_model = UMAP(
+            n_components=gl.N_COMPONENTS[0],
+            n_neighbors=gl.N_NEIGHBORS[0],
+            random_state=42,
+            metric=gl.METRIC[0],
+            verbose=True,
+            low_memory=False,  # Changed to False to use more memory but faster processing
+            n_jobs=-1,
+            transform_queue_size=4  # Increase queue size for parallel processing
+        )
+        
+        # Optimize HDBSCAN for better performance
+        self.hdbscan_model = HDBSCAN(
+            min_samples=gl.MIN_SAMPLES[0],
+            min_cluster_size=gl.MIN_CLUSTER_SIZE[0],
+            prediction_data=True,
+            core_dist_n_jobs=-1,  # Use all CPU cores
+            algorithm='best',
+            memory=Memory(location=gl.output_folder)  # Cache computations
+        )
+        
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # Initialize TfidfVectorizer with desired parameters
+        self.vectorizer = TfidfVectorizer(
+            max_df=gl.MAX_DF[0],              # Ignore terms with a document frequency higher than this threshold
+            min_df=gl.MIN_DF[0],                 # Ignore terms with a document frequency lower than this threshold
+            stop_words='english',     # Remove English stop words
+            ngram_range=(1, 1),       # Consider unigrams and bigrams
+            use_idf=True,             # Enable inverse document frequency reweighting
+            smooth_idf=True           # Smooth IDF weights by adding one to document frequencies
+        )
+        
+        self.representation_model = {
+                "KeyBERT": KeyBERTInspired(),
+                "MMR": MaximalMarginalRelevance(diversity=0.3),
+                "POS": PartOfSpeech("en_core_web_sm")
+            }
+
+    def load_data(self):
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"The file at path {file_path} does not exist.")
+
+        # Define the file path and the number of rows to read as a subsample
+        chunk_size = gl.CHUNK_SIZE  # Adjust this number to read a subsample
+        # Use chunksize to limit rows number per iteration
+        meta = pd.DataFrame()
+        try:
+            chunk_reader = pd.read_csv(
+                                        file_path, 
+                                       chunksize=chunk_size, 
+                                       skiprows=range(1, gl.START_ROWS+1),
+                                       nrows=gl.NROWS  # Adjust this number to read a subsample
+                                       )
+        except OSError as e:
+            print(f"Error reading the file: {e}")
+            raise
+
+        # ANSI escape codes for green color
+        GREEN = '\033[92m'
+        RESET = '\033[0m'
+        # Wrap the chunk reader with tqdm to track progress
+        for chunk in tqdm(chunk_reader, total=gl.NROWS//chunk_size, bar_format=f'{GREEN}{{l_bar}}{{bar:20}}{{r_bar}}{RESET}'):
+            filtered_chunk = chunk[(chunk["year"] <= gl.YEAR_FILTER) & (chunk["year"] >= gl.START_YEAR)] # Filter by START_YEAR and YEAR_FILTER
+            filtered_chunk = filtered_chunk.reset_index()
+            filtered_chunk = filtered_chunk.sort_values(by='isdelayed_flag', ascending=False).drop_duplicates(subset=gl.UNIQUE_KEYS, keep='first')
+            meta = pd.concat([meta, filtered_chunk], ignore_index=True)       
+        return meta
+
+    def pre_process_text(self, data):
+        # Preprocess the text
+        nlp = NlpPreProcess()
+        data = data[data['speakertypeid'] != 1]
+        data['text'] = data[gl.TEXT_COLUMN].astype(str)
+        data['post_date'] = pd.to_datetime(data[gl.DATE_COLUMN])
+        data['post_year'] = data['post_date'].dt.year
+        data['post_quarter'] = data['post_date'].dt.month
+        data['yearq'] = data['post_year'].astype(str) + 'Q' + data['post_quarter'].astype(str)
+        data = data.drop(columns = ['Unnamed: 0'])
+        data['text'] = nlp.preprocess_file(data, 'text')
+        data = data.drop_duplicates(subset='text', keep='first')
+        docs = [str(row['text']) for _, row in data.iterrows() if len(str(row["text"])) > 30]
+        return docs
+
+    def filter_empty_topics(self, topics):
+        filtered_topics = {}
+        for topic_num, topic_words in topics.items():
+            valid_words = [(word, score) for word, score in topic_words if word]  # Remove empty words
+            if valid_words:
+                filtered_topics[topic_num] = valid_words
+        return filtered_topics
+
+    def compute_coherence_score(self, topic_model, texts):
+        # Get the top 10 words per topic
+        topics = topic_model.get_topics()
+        print(f"Number of topics: {len(topics)}")
+        filtered_topics = self.filter_empty_topics(topics)
+        # Extract topic words into a list of lists
+        topics_list = [[word for word, _ in topic_words] for topic_num, topic_words in filtered_topics.items() if topic_num != -1]
+
+        # Ensure texts are tokenized (i.e., a list of lists)
+        if isinstance(texts[0], str):
+            texts = [doc.split() for doc in texts]  # Simple tokenization if they are in string format
+
+        dictionary = Dictionary(texts)
+        
+        # Initialize the CoherenceModel
+        coherence_model = CoherenceModel(
+            topics=topics_list,  # Pass the list of topic words
+            texts=texts,
+            dictionary=dictionary,  # Create a Gensim dictionary 
+            coherence='c_v'
+        )
+        # Compute the coherence score
+        coherence_score = coherence_model.get_coherence()
+        return coherence_score
+
+    # Helper function for processing batches
+    def process_batch_gpu(self, i, batch_size, docs, embedding_model, N_):
+        i_end = min(i + batch_size, N_)
+        batch = docs[i:i_end]
+        
+        # Process in smaller sub-batches if needed
+        sub_batch_size = 128
+        batch_embeds = []
+        
+        for j in range(0, len(batch), sub_batch_size):
+            sub_batch = batch[j:j + sub_batch_size]
+            with torch.cuda.amp.autocast():  # Enable automatic mixed precision
+                sub_batch_embed = embedding_model.encode(
+                    sub_batch,
+                    device=self.device,
+                    show_progress_bar=False,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True
+                )
+            batch_embeds.append(sub_batch_embed)
+            
+        batch_embed = np.vstack(batch_embeds)
+        return batch_embed, i, i_end
+
+    def print_gpu_memory(self):
+        if torch.cuda.is_available():
+            print(f"GPU memory allocated: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+            print(f"GPU memory cached: {torch.cuda.memory_reserved()/1e9:.2f} GB")
+            os.system("nvidia-smi --query-gpu=memory.total,memory.used,memory.free --format=csv")
+    
+    def Bertopic_run(self, docs):
+        print("Starting BERTopic processing...")
+        
+        # Calculate optimal batch size based on available GPU memory
+        total_gpu_memory = torch.cuda.get_device_properties(0).total_memory
+        embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
+        # Estimate memory per document (in bytes)
+        mem_per_doc = embedding_dim * 4  # 4 bytes per float32
+        # Use 80% of available GPU memory
+        optimal_batch_size = int((total_gpu_memory * 0.8) / mem_per_doc)
+        batch_size = min(optimal_batch_size, 1024)  # Cap at 1024 for stability
+        
+        print(f"Using batch size: {batch_size}")
+        
+        # Initialize embeddings array with float32 instead of float64
+        embeddings = np.zeros((len(docs), embedding_dim), dtype=np.float32)
+        
+        # Process documents in optimized batches
+        for i in tqdm(range(0, len(docs), batch_size), colour="Blue"):
+            batch_embed, i, i_end = self.process_batch_gpu(i, batch_size, docs, self.embedding_model, len(docs))
+            embeddings[i:i_end, :] = batch_embed
+            
+            # Explicit GPU memory cleanup
+            if i % (batch_size * 10) == 0:
+                torch.cuda.empty_cache()
+
+        # Ensure embeddings do not have NaN or Inf
+        embeddings = np.nan_to_num(embeddings, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Check if the shape of embeddings matches the number of documents
+        if len(docs) != embeddings.shape[0]:
+            raise ValueError(f"Number of training docs ({len(docs)}) does not match embedding shape ({embeddings.shape[0]}).")
+        
+        print(f"Embeddings shape: {embeddings.shape}")
+        print(f"Number of training documents: {len(docs)}")
+        # Add these debug prints in both environments
+        print("Local/Cloud Environment Check:")
+        print("Embeddings type:", type(embeddings))
+        print("Embeddings shape:", embeddings.shape)
+        print("Embeddings dtype:", embeddings.dtype)
+        print("Number of documents:", len(docs))
+        print("SEED_TOPICS length:", len(gl.SEED_TOPICS))
+        print("Sample SEED_TOPICS shape:", [len(topic) for topic in gl.SEED_TOPICS[:3]])
+
+        # Check for NaN or infinite values
+        print("Has NaN:", np.isnan(embeddings).any())
+        print("Has Inf:", np.isinf(embeddings).any())    
+        # Fit BERTopic with precomputed embeddings and models
+        # Use in your code
+        self.print_gpu_memory()  # Before UMAP
+        # reduced_embeddings = self.reduce_dimensionality(embeddings, n_components=50)
+
+        topic_model = BERTopic(
+            embedding_model=self.embedding_model,
+            umap_model=self.umap_model,
+            hdbscan_model = self.hdbscan_model,  
+            vectorizer_model = self.vectorizer,
+            calculate_probabilities=True,
+            top_n_words=gl.TOP_N_WORDS[0],
+            verbose=True,
+            nr_topics=gl.NR_TOPICS[0],
+            seed_topic_list=gl.SEED_TOPICS,
+            representation_model=self.representation_model
+        )
+        try:
+            # Fit the model and check for any issues
+            topic_model.fit_transform(docs, embeddings=embeddings)
+        except ValueError as e:
+            print(f"Error during BERTopic fitting: {e}")
+            raise
+        self.print_gpu_memory()  # After UMAP
+        topic_model.save(os.path.join(gl.model_folder, f"bertopic_model_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pkl"))
+        return topic_model
+    
+
+    def save_file(self, data, path, bar_length=100):
+        #write the doc to a txt file
+        with open(path, 'w') as f:
+            with tqdm(total=len(data), desc="Saving data", bar_format="{l_bar}{bar} [time left: {remaining}]", ncols=bar_length, colour="green") as pbar:
+                for item in data:
+                    f.write("%s\n" % item)
+                    pbar.update(1)
+                    
+    def save_figures(self, topic_model):
+        # Save the visualization
+        visualization_path = os.path.join(gl.output_fig_folder, f'bertopic{gl.num_topic_to_plot}.pdf')
+        fig = topic_model.visualize_barchart(top_n_topics=gl.num_topic_to_plot)
+        fig.write_image(visualization_path)
+        fig1 = topic_model.visualize_topics()
+        fig1.write_image(visualization_path.replace('.pdf', f'_intertopic_distance_map_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
+        fig2 = topic_model.visualize_heatmap()
+        fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
+        fig3 = topic_model.visualize_hierarchy()
+        fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.pdf'))
+        print(f"Visualization saved to {visualization_path}")
+
+    # def load_doc(self, path):
+    #     # load the doc from a txt file to a list
+    #     with open(path, 'r') as f:
+    #         return f.readlines()
+    def reduce_dimensionality(self, embeddings, n_components=50):
+        pca = PCA(n_components=n_components)
+        reduced_embeddings = pca.fit_transform(embeddings)
+        print(f"Reduced embeddings shape: {reduced_embeddings.shape}")
+        return reduced_embeddings
+        
+    def load_doc_chunk(self, chunk_start, chunk_size, path):
+        """Load a specific chunk of the document."""
+        with open(path, 'r') as f:
+            f.seek(chunk_start)  # Move to the start of the chunk
+            lines = f.read(chunk_size).splitlines()
+        return lines
+
+    def chunkify_file(self, path, num_chunks=cpu_count()):
+        """Determine file chunks for multiprocessing."""
+        with open(path, 'r') as f:
+            f.seek(0, 2)  # Move to the end of the file
+            file_size = f.tell()
+            chunk_size = file_size // num_chunks
+        
+        chunk_starts = [i * chunk_size for i in range(num_chunks)]
+        return chunk_starts, chunk_size
+
+    def load_doc_parallel(self, path):
+        """Load the doc from a txt file to a list using multiple processes."""
+        num_chunks = cpu_count()
+        chunk_starts, chunk_size = self.chunkify_file(path, num_chunks)
+
+        with Pool(num_chunks) as pool:
+            docs = pool.starmap(self.load_doc_chunk, [(start, chunk_size, path) for start in chunk_starts])
+        
+        # Flatten the list of lists into a single list
+        docs = [line for chunk in docs for line in chunk]
+        return docs
+
+        
+    def save_topic_keywords(self, topic_model):
+        # Get topic information and save
+        topic_info = topic_model.get_topic_info()
+        num_topic = len(topic_info)
+        # save the topic information to csv file
+        TOPIC_INFO_path = os.path.join(gl.output_folder, f"topic_keywords_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{gl.START_YEAR}_{gl.YEAR_FILTER}.csv")
+        topic_info.to_csv(TOPIC_INFO_path, index=False)
+        
+
+    def optimize_model_parameters(self, docs, test_params=None):
+        """
+        Optimize BERTopic model parameters using grid search and coherence scores.
+        
+        Args:
+            docs: List of documents
+            test_params: Dictionary of parameters to test (optional)
+        
+        Returns:
+            best_params: Dictionary of optimal parameters
+            best_score: Best coherence score achieved
+        """
+        if test_params is None:
+            test_params = {
+                'n_neighbors': [5, 15, 30],
+                'n_components': [3, 5, 7],
+                'min_cluster_size': [20, 30, 40],
+                'min_samples': [5, 10, 15]
+            }
+        
+        best_score = -float('inf')
+        best_params = None
+        results = []
+        
+        # Calculate embeddings once to reuse
+        print("Calculating document embeddings...")
+        embeddings = np.zeros((len(docs), self.embedding_model.get_sentence_embedding_dimension()), dtype=np.float32)
+        batch_size = gl.BATCH_SIZE
+        
+        for i in tqdm(range(0, len(docs), batch_size), desc="Computing embeddings"):
+            batch_embed, _, i_end = self.process_batch_gpu(i, batch_size, docs, self.embedding_model, len(docs))
+            embeddings[i:i_end, :] = batch_embed
+        
+        # Generate parameter combinations
+        param_combinations = [dict(zip(test_params.keys(), v)) 
+                             for v in itertools.product(*test_params.values())]
+        
+        for params in tqdm(param_combinations, desc="Testing parameter combinations"):
+            try:
+                # Update models with current parameters
+                self.umap_model = UMAP(
+                    n_neighbors=params['n_neighbors'],
+                    n_components=params['n_components'],
+                    random_state=42,
+                    metric='cosine',
+                    low_memory=False,
+                    n_jobs=-1
+                )
+                
+                self.hdbscan_model = HDBSCAN(
+                    min_cluster_size=params['min_cluster_size'],
+                    min_samples=params['min_samples'],
+                    prediction_data=True,
+                    core_dist_n_jobs=-1,
+                    algorithm='best',
+                    memory=Memory(location=gl.output_folder)
+                )
+                
+                # Create and fit topic model
+                topic_model = BERTopic(
+                    embedding_model=self.embedding_model,
+                    umap_model=self.umap_model,
+                    hdbscan_model=self.hdbscan_model,
+                    vectorizer_model=self.vectorizer,
+                    calculate_probabilities=True,
+                    verbose=True
+                )
+                
+                # Fit the model
+                topic_model.fit_transform(docs, embeddings=embeddings)
+                
+                # Calculate coherence score
+                coherence_score = self.compute_coherence_score(topic_model, docs)
+                
+                # Store results
+                results.append({
+                    'params': params,
+                    'coherence_score': coherence_score,
+                    'n_topics': len(topic_model.get_topics())
+                })
+                
+                # Update best parameters if necessary
+                if coherence_score > best_score:
+                    best_score = coherence_score
+                    best_params = params
+                    
+                # Clear GPU memory
+                torch.cuda.empty_cache()
+                
+            except Exception as e:
+                print(f"Error with parameters {params}: {str(e)}")
+                continue
+        
+        # Save results to CSV
+        results_df = pd.DataFrame(results)
+        results_df.to_csv(os.path.join(gl.output_folder, 'parameter_optimization_results.csv'), index=False)
+        
+        print(f"\nBest parameters found:")
+        print(f"Parameters: {best_params}")
+        print(f"Coherence score: {best_score}")
+        
+        return best_params, best_score
+
+
+    
+if __name__ == "__main__":
+    bt = BERTopicGPU()
+    docs_path = os.path.join(gl.output_folder, f'preprocessed_docs_{gl.START_YEAR}_{gl.YEAR_FILTER}.txt')
+    
+    if os.path.exists(docs_path):
+        print("Reading preprocessed docs from preprocessed_docs.txt")
+        docs = bt.load_doc_parallel(docs_path)
+        docs = list(set(docs))
+    else:
+        meta = bt.load_data()
+        docs = bt.pre_process_text(meta)
+        bt.save_file(docs, docs_path, bar_length=100)
+
+    # Skip optimization and use predefined parameters
+    topic_model = bt.Bertopic_run(docs)
+    bt.save_topic_keywords(topic_model)
+    bt.save_figures(topic_model)
+    print("BERTopic model training completed.")
+
+
+
+'''
+Compare the updates with the v3.py
+ # Old parameters                # New parameters
+   N_NEIGHBORS = [28]             → [15]      # Less memory, still effective
+   N_COMPONENTS = [6]             → [5]       # Simpler dimensionality
+   MIN_DIST = [0.0]              → [0.1]     # Better cluster separation
+   MIN_SAMPLES = [15]            → [10]      # More granular topics
+   MIN_CLUSTER_SIZE = [40]       → [30]      # Smaller but meaningful clusters
+   NR_TOPICS = [150]             → [100]     # More focused topic count
+   
+
+
+  # Old workflow
+   1. Load/preprocess docs
+   2. Run BERTopic with fixed parameters
+   3. Save results
+
+   # New workflow
+   1. Load/preprocess docs
+   2. Run parameter optimization
+   3. Run BERTopic with optimized parameters
+   4. Save results
+'''

@@ -20,29 +20,29 @@ TOPIC_SCATTER_PLOT = os.path.join(output_fig_folder, "topic_scatter_plot.pdf")
 num_topic_to_plot = 20 # top_N topics to plot
 MODEL_SELECTION_RESULTS = os.path.join(output_folder, "model_selection_results.csv")
 TEXT_COLUMN = "componenttext" # the column in the main earnings call data that contains the earnings transcript
-START_ROWS = 7000000 # start row to read from the csv file
-NROWS = 80000000 # number of rows to read from the csv file
+START_ROWS = 1000000 # start row to read from the csv file
+NROWS = 10000000 # number of rows to read from the csv file
 CHUNK_SIZE = 1000 # number of rows to read at a time
-YEAR_FILTER = 2020 # train the model on data from start year to this year
-START_YEAR = 2019 # start year of the data
+YEAR_FILTER = 2013 # train the model on data from start year to this year
+START_YEAR = 2011 # start year of the data
 # Batch Size for Bert Topic Model Training in BERTopic_big_data_hpc.py
-BATCH_SIZE = 1000
+BATCH_SIZE = 2048
 
 # create a list of parameters to search over using GridSearchCV
-N_NEIGHBORS = [28] # Number of Neighbors in UMAP, the higher number requires more computational power
-N_COMPONENTS = [6] # More dimensions might allow for a richer, more nuanced representation of the data, which can help the model distinguish different topics more effectively.
-MIN_DIST = [0.0] # Lower value will make the topic more distinct from each other
-MIN_SAMPLES = [15] #The higher value will make the topics output fewer topics, but larger, and robust clusters.
-MIN_CLUSTER_SIZE = [40] # A large value will lead to larger, more stable clusters, but fewer clusters.
+N_NEIGHBORS = [15]  # Reduced from 28 - better for memory efficiency while maintaining topic quality
+N_COMPONENTS = [5]  # Reduced from 6 - still captures main dimensions while being more memory efficient
+MIN_DIST = [0.1]  # Increased from 0.0 - better for cluster separation
+MIN_SAMPLES = [10]  # Reduced from 15 - better for detecting smaller but meaningful topics
+MIN_CLUSTER_SIZE = [30]  # Reduced from 40 - allows for more granular topic detection
 N_TOPICS = [100] # Number of Topics in Topic Model
-TOP_N_WORDS = [20] # Number of Top Words in Topic Model
+TOP_N_WORDS = [15]  # Reduced from 20 - focuses on most relevant terms
 METRIC = ['cosine']
 EMBEDDING_MODELS = ['paraphrase-MiniLM-L6-v2'] #'all-MiniLM-L6-v2'
-MAX_DF = [0.95] # remove the top 15% of the most frequent words
-MIN_DF = [5] # eliminate very rare words
+MAX_DF = [0.90]  # Reduced from 0.95 - stricter on common terms
+MIN_DF = [10]  # Increased from 5 - better noise reduction
 MIN_COUNT = 2 # SMART_N_GRAM minimum number of times a word must appear in the corpus to be included in the vocabulary
 THRESHOLD = 5 # SMART_N_GRAM
-NR_TOPICS = [150] # Number of Topics in Topic Model
+NR_TOPICS = [100]  # Adjusted from 150 - more manageable number of topics
 
 # SAVE RESULTS 
 SAVE_RESULTS_COLS = ["params", "score", "probability"]
