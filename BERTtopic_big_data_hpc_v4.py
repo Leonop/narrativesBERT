@@ -487,4 +487,32 @@ Compare the updates with the v3.py
    2. Run parameter optimization
    3. Run BERTopic with optimized parameters
    4. Save results
+
+graph TD
+    A[Start] --> B[Initialize BERTopicGPU]
+    B --> C{Check if preprocessed docs exist}
+    
+    C -->|Yes| D[Load preprocessed docs]
+    C -->|No| E[Load raw data & preprocess]
+    E --> F[Save preprocessed docs]
+    
+    D --> G[Parameter Optimization Phase]
+    F --> G
+    
+    G --> H[Calculate embeddings once]
+    H --> I[Test different parameter combinations]
+    I --> J[Calculate coherence scores]
+    J --> K[Find best parameters]
+    K --> L[Save optimization results]
+    
+    L --> M[Update UMAP & HDBSCAN with best params]
+    M --> N[Train final BERTopic model]
+    N --> O[Save topic keywords]
+    O --> P[Save visualizations]
+    P --> Q[End]
+
+    subgraph "Parameter Optimization Loop"
+        I --> J
+        J --> I
+    end
 '''
