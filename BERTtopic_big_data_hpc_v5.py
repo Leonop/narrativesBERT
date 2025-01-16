@@ -33,10 +33,10 @@ from joblib import Memory
 print(Memory)
 warnings.filterwarnings('ignore')
 current_path = os.getcwd()
-file_path = os.path.join(current_path, 'data', 'earnings_calls_20231017.csv')
 tqdm.pandas()
 joblib.Parallel(n_jobs=1)
 import openai
+import time
 
 class BERTopicGPU(object):
     def __init__(self):
@@ -85,21 +85,27 @@ class BERTopicGPU(object):
                 "KeyBERT": KeyBERTInspired(),
                 "MMR": MaximalMarginalRelevance(diversity=0.3),
                 "POS": PartOfSpeech("en_core_web_sm"),
-                "Theme": TextGeneration(model="gpt-3.5-turbo")
             }
 
         # Get API key from environment variable
-        self.openai_api_key = os.path.join('data', 'OPENAI_API_KEY')
-        if not self.openai_api_key:
-            raise ValueError("OpenAI API key not found in environment variables")
+        try:
+            # Read API key from file
+            api_key_path = os.path.join(os.getcwd(), 'data', 'OPENAI_API_KEY.txt')
+            with open(api_key_path, 'r') as f:
+                openai.api_key = f.read().strip()
+        except FileNotFoundError:
+            raise ValueError(f"OpenAI API key file not found at {api_key_path}")
+        except Exception as e:
+            raise ValueError(f"Error setting OpenAI API key: {e}")
             
         # Set OpenAI API key
-        openai.api_key = self.openai_api_key
+        self.file_path = os.path.join(current_path, 'data', 'earnings_calls_20231017.csv')
+
 
     def load_data(self):
         # Check if the file exists
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"The file at path {file_path} does not exist.")
+        if not os.path.exists(self.file_path):
+            raise FileNotFoundError(f"The file at path {self.file_path} does not exist.")
 
         # Define the file path and the number of rows to read as a subsample
         chunk_size = gl.CHUNK_SIZE  # Adjust this number to read a subsample
@@ -107,7 +113,7 @@ class BERTopicGPU(object):
         meta = pd.DataFrame()
         try:
             chunk_reader = pd.read_csv(
-                                        file_path, 
+                                        self.file_path, 
                                        chunksize=chunk_size, 
                                        skiprows=range(1, gl.START_ROWS+1),
                                        nrows=gl.NROWS  # Adjust this number to read a subsample
@@ -354,15 +360,27 @@ class BERTopicGPU(object):
             lambda x: docs_per_topic.get(x, [])
         )
         
-        # Add themes using GPT
+        # Process themes in batches to avoid rate limits
         print("Generating themes for topics...")
-        topic_info['Theme'] = topic_info.apply(
-            lambda row: self.generate_topic_theme(
-                eval(row['Representation']),  # Convert string representation to list
-                row['Representative_Docs']
-            ),
-            axis=1
-        )
+        batch_size = 5  # Process 5 topics at a time
+        themes = []
+        
+        for i in tqdm(range(0, len(topic_info), batch_size)):
+            batch = topic_info.iloc[i:i+batch_size]
+            batch_themes = []
+            
+            for _, row in batch.iterrows():
+                theme = self.generate_topic_theme(
+                    eval(row['Representation']) if isinstance(row['Representation'], str) else row['Representation'],
+                    row['Representative_Docs']
+                )
+                theme = self.validate_theme(theme, eval(row['Representation']))
+                batch_themes.append(theme)
+                time.sleep(0.5)  # Rate limiting for API calls
+                
+            themes.extend(batch_themes)
+        
+        topic_info['Theme'] = themes
         
         # Save to CSV
         output_path = os.path.join(
@@ -372,140 +390,92 @@ class BERTopicGPU(object):
         topic_info.to_csv(output_path, index=False)
         print(f"Topic information saved to {output_path}")
 
+    def create_text_generation_model(self):
+        """Create a custom text generation model that uses OpenAI API"""
+        class CustomTextGeneration:
+            def transform(self, topic_words):
+                # Convert topic words to a readable format
+                words_str = ', '.join([word for word, _ in topic_words[:10]])
+                try:
+                    response = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a financial topic analyzer."},
+                            {"role": "user", "content": f"Create a 2-4 word business theme based on these keywords: {words_str}"}
+                        ],
+                        temperature=0.3,
+                        max_tokens=10
+                    )
+                    return response.choices[0].message['content'].strip()
+                except Exception as e:
+                    print(f"Error in text generation: {e}")
+                    # Fallback: return concatenated top words
+                    return ' '.join([word for word, _ in topic_words[:3]])
+
+        return CustomTextGeneration()
+
     def generate_topic_theme(self, keywords, representative_docs):
         """Generate a descriptive theme using GPT for a set of keywords and representative documents"""
-        # Clean and format keywords
-        if isinstance(keywords, str):
-            # Convert string representation to list and clean
-            keywords = eval(keywords) if keywords.startswith('[') else keywords.split(', ')
-        
-        # Take top 5 keywords for more focused theme generation
-        top_keywords = keywords[:5]
-        
-        # Create a more structured prompt
-        prompt = f"""
-        As a financial analyst, create a concise 1-3 word business theme based on these earnings call keywords:
-        Primary keywords: {', '.join(top_keywords)}
-        
-        Context: These keywords appear in earnings call transcripts discussing company performance and operations.
-        
-        Requirements:
-        - Theme should be professional and business-focused
-        - Use standard financial/business terminology
-        - Be specific but concise (1-3 words)
-        - Capture the main business concept
-        
-        Example themes:
-            "Revenue Growth",
-            "Profitability",
-            "Operational Cash Flow Management",
-            "Market Expansion Strategy",
-            "Cash Flows",
-            "Dividend",
-            "Short Term",
-            "Guidance",
-            "Investment",
-            "Corporate Tax",
-            "Operating Cost",
-            "Market Share",
-            "Financial Position",
-            "Financing",
-            "Asset Impairment",
-            "Customer Segment",
-            "Inventory Turnover",
-            "Sales Pipeline",
-            "Foreign Exchange Impact",
-            "New Product Launches",
-            "Capacity Utilization",
-            "Litigation Risk",
-            "Geographic Expansion",
-            "Seasonality",
-            "Pricing Power",
-            "Partnerships And Collaborations",
-            "Debt-To-Equity Ratio",
-            "Backlog And Order Status",
-            "Promotion Strategy",
-            "Productivity Metrics",
-            "Raw Material",
-            "Weather Impact",
-            "Online Sales",
-            "Customer Acquisition Costs",
-            "Regulation",
-            "Bundle Pricing Strategies",
-            "Supply Chain",
-            "Macroeconomics",
-            "Talent Hiring",
-            "Corporate Innovation",
-            "Insurance",
-            "Organization Restructuring",
-            "Marketing Strategy",
-            "Industry Forecast",
-            "Employee Headcount",
-            "Business Segment Breakdowns",
-            "Operational Risk",
-            "Product Performance",
-            "Artificial Intelligence",
-            "Business Challenges",
-            "Cloud Computing",
-            "Corporate Governance",
-            "Research And Development",
-            "Subsidiary Performance",
-            "Labor Costs",
-            "Funding Rate",
-            "Environmental Impact",
-            "Firm Performance",
-            "CEO Transition",
-            "Customer Management",
-            "Business Strategy",
-            "Risk Hedging",
-            "Geopolitical Risk",
-            "Market Confidence",
-            "Pension Management",
-            "Cybersecurity",
-            "Credit Rating",
-            "Regulatory Risk",
-            "Financing Cost",
-            "Sales And Marketing",
-            "Social Responsibility",
-            "Machinery Operations",
-            "Employee Compensation",
-            "Share Dilution",
-            "Merger And Acquisition",
-            "Political Risk",
-            "Contract Expiration",
-            "Loan Covenants",
-            "Sales Force Efficiency",
-            "Employee Engagement",
-            "Liquidity Risk",
-            "Warrant Exercise",
-            "Option Exercise",
-            "IT Infrastructure",
-            "Market Rumors",
-            "Seasonal Factors",
-            "Industry Benchmarking",
-            "Economic Forecast",
-            "Commodity Prices",
-            "Market Auctions",
-            "Industry Specific Factors"
-        """
-        
         try:
+            # Clean and format keywords
+            if isinstance(keywords, str):
+                keywords = eval(keywords) if keywords.startswith('[') else keywords.split(', ')
+            
+            # Take top keywords and clean them
+            top_keywords = [k.replace('_', ' ') for k in keywords[:5]]
+            
+            # Get representative text samples (limited to reduce token count)
+            doc_samples = representative_docs[:2] if representative_docs else []
+            doc_context = "\nExample discussions:\n" + "\n".join(doc_samples) if doc_samples else ""
+            
+            # Create a focused prompt
+            prompt = f"""
+            Analyze these earnings call keywords and create a concise business theme (2-4 words):
+            
+            Primary Keywords: {', '.join(top_keywords)}
+            Secondary Keywords: {', '.join([k.replace('_', ' ') for k in keywords[5:8]])}
+            {doc_context}
+
+            Requirements:
+            - Use standard financial/business terminology
+            - Be specific but concise (2-3 words)
+            - Focus on the main business concept or metric
+            - Avoid generic terms like "business" or "corporate" unless essential
+            
+            Example good themes for different keyword sets:
+            - revenue, growth, margin → "Revenue Growth Performance"
+            - capacity, utilization, efficiency → "Operational Capacity Management"
+            - market, share, penetration → "Market Share Expansion"
+            - product, launch, innovation → "Product Innovation Strategy"
+            """
+            
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a financial analyst expert specializing in earnings call analysis."},
+                    {"role": "system", "content": "You are a financial analyst specializing in earnings call topic analysis."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.3,
-                max_tokens=20
+                max_tokens=30,
+                presence_penalty=0.1,
+                frequency_penalty=0.1
             )
+            
             theme = response.choices[0].message['content'].strip()
+            
+            # Validate theme length and format
+            words = theme.split()
+            if len(words) < 2 or len(words) > 5:
+                # Fallback to a simpler format if theme is too long/short
+                return ' '.join(word.title() for word in top_keywords[:3])
+            
             return theme
+
         except Exception as e:
             print(f"Error generating theme: {e}")
-            # Fallback: Create a simple theme from top 3 keywords
-            top_3 = [word.replace('_', ' ').title() for word in keywords[:3]]
-            return ' & '.join(top_3)
+            # Fallback: Create a simple theme from top keywords
+            fallback_keywords = [k.replace('_', ' ').title() for k in keywords[:3]]
+            return ' & '.join(fallback_keywords)
 
     def optimize_model_parameters(self, docs, test_params=None):
         """
@@ -663,6 +633,24 @@ class BERTopicGPU(object):
         """Add descriptive topic names to the dataframe"""
         df['Topic_Name'] = df['Representation'].apply(self.generate_topic_name)
         return df
+
+    def validate_theme(self, theme, keywords):
+        """Validate and clean generated themes"""
+        # Remove any unwanted characters or formatting
+        theme = theme.strip('"\'').strip()
+        
+        # Check if theme is too generic
+        generic_terms = {'topic', 'theme', 'discussion', 'earnings call', 'business'}
+        theme_words = set(theme.lower().split())
+        
+        if theme_words.issubset(generic_terms):
+            # If theme is too generic, use keywords
+            return ' '.join(k.replace('_', ' ').title() for k in keywords[:3])
+        
+        # Ensure proper capitalization
+        theme = ' '.join(word.capitalize() for word in theme.split())
+        
+        return theme
 
     
 if __name__ == "__main__":
