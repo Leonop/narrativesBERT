@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=bertTopic        # Job name
-#SBATCH --output=log_files/bertTopic.out      # Standard output and error log
-#SBATCH --error=log_files/bertTopic.err       # Separate file for error logs
+#SBATCH --output=log_files/bertTopic_openai.out      # Standard output and error log
+#SBATCH --error=log_files/bertTopic_openai.err       # Separate file for error logs
 #SBATCH --partition=gpu72           # Partition for GPU nodes (qgpu)
 #SBATCH --nodes=1                    # Use one node
 #SBATCH --ntasks=1                   # Number of tasks per node
