@@ -390,30 +390,6 @@ class BERTopicGPU(object):
         topic_info.to_csv(output_path, index=False)
         print(f"Topic information saved to {output_path}")
 
-    def create_text_generation_model(self):
-        """Create a custom text generation model that uses OpenAI API"""
-        class CustomTextGeneration:
-            def transform(self, topic_words):
-                # Convert topic words to a readable format
-                words_str = ', '.join([word for word, _ in topic_words[:10]])
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a financial topic analyzer."},
-                            {"role": "user", "content": f"Create a 2-4 word business theme based on these keywords: {words_str}"}
-                        ],
-                        temperature=0.3,
-                        max_tokens=10
-                    )
-                    return response.choices[0].message['content'].strip()
-                except Exception as e:
-                    print(f"Error in text generation: {e}")
-                    # Fallback: return concatenated top words
-                    return ' '.join([word for word, _ in topic_words[:3]])
-
-        return CustomTextGeneration()
-
     def generate_topic_theme(self, keywords, representative_docs):
         """Generate a descriptive theme using GPT for a set of keywords and representative documents"""
         try:
