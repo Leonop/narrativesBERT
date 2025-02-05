@@ -85,7 +85,6 @@ class BERTopicGPU(object):
                 "KeyBERT": KeyBERTInspired(),
                 "MMR": MaximalMarginalRelevance(diversity=0.3),
                 "POS": PartOfSpeech("en_core_web_sm"),
-                "Theme": TextGeneration(model="gpt-3.5-turbo")
             }
 
         # Get API key from environment variable

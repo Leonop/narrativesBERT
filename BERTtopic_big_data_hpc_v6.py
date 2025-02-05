@@ -78,19 +78,28 @@ class BERTopicGPU(object):
         self.YEAR_START = YEAR_START
         self.YEAR_END = YEAR_END
         
-        # Initialize device more robustly
-        if torch.cuda.is_available():
-            try:
-                self.device = torch.device("cuda")
-                # Test GPU access
-                torch.cuda.current_device()
-                logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
-            except Exception as e:
-                logger.warning(f"GPU initialization failed: {e}")
-                self.device = torch.device("cpu")
-        else:
-            logger.warning("No CUDA available, using CPU")
-            self.device = torch.device("cpu")
+        # Initialize CUDA with proper error handling
+        try:
+            if torch.cuda.is_available():
+                # Clear GPU memory first
+                torch.cuda.empty_cache()
+                torch.backends.cudnn.benchmark = True
+                
+                # Get the first available GPU
+                current_device = torch.cuda.current_device()
+                self.device = f'cuda:{current_device}'
+                
+                # Log GPU info
+                gpu_properties = torch.cuda.get_device_properties(current_device)
+                logger.info(f"Using GPU: {gpu_properties.name}")
+                logger.info(f"GPU Memory: {gpu_properties.total_memory / 1e9:.2f} GB")
+            else:
+                self.device = 'cpu'
+                logger.info("No GPU available, using CPU")
+        except Exception as e:
+            logger.warning(f"Error initializing GPU: {e}")
+            self.device = 'cpu'
+            logger.info("Falling back to CPU")
         
         # Initialize the embedding model
         try:
@@ -137,23 +146,22 @@ class BERTopicGPU(object):
         
         # Initialize TfidfVectorizer with desired parameters
         self.vectorizer = TfidfVectorizer(
-            max_df=gl.MAX_DF[0],              # Ignore terms with a document frequency higher than this threshold
-            min_df=gl.MIN_DF[0],                 # Ignore terms with a document frequency lower than this threshold
-            stop_words='english',     # Remove English stop words
-            ngram_range=(1, 1),       # Consider unigrams and bigrams
-            use_idf=True,             # Enable inverse document frequency reweighting
-            smooth_idf=True           # Smooth IDF weights by adding one to document frequencies
+            max_df=gl.MAX_DF[0],
+            min_df=gl.MIN_DF[0],
+            stop_words='english',
+            ngram_range=(1, 1),
+            use_idf=True,
+            smooth_idf=True
         )
         
         self.representation_model = {
-                "KeyBERT": KeyBERTInspired(),
-                "MMR": MaximalMarginalRelevance(diversity=0.3),
-                "POS": PartOfSpeech("en_core_web_sm"),
-            }
+            "KeyBERT": KeyBERTInspired(),
+            "MMR": MaximalMarginalRelevance(diversity=0.3),
+            "POS": PartOfSpeech("en_core_web_sm"),
+        }
 
         # Get API key from environment variable
         try:
-            # Read API key from file
             api_key_path = os.path.join(os.getcwd(), 'data', 'OPENAI_API_KEY.txt')
             with open(api_key_path, 'r') as f:
                 openai.api_key = f.read().strip()
@@ -165,12 +173,10 @@ class BERTopicGPU(object):
         # Set OpenAI API key
         self.file_path = os.path.join(current_path, 'data', gl.data_filename)
 
-
     def load_data(self):
         logger.info(f"Starting data loading for years {self.YEAR_START}-{self.YEAR_END}")
         
         try:
-            # First read the CSV headers and estimate total rows
             df_header = pd.read_csv(self.file_path, nrows=0)
             file_size = os.path.getsize(self.file_path)
             estimated_rows = file_size // 500  # Rough estimate based on average row size
@@ -179,7 +185,6 @@ class BERTopicGPU(object):
             logger.info(f"Expected columns: {expected_cols}")
             logger.info(f"Columns: {df_header.columns.tolist()}")
             
-            # Read data with custom CSV parsing
             chunks = pd.read_csv(
                 self.file_path,
                 chunksize=gl.CHUNK_SIZE,
@@ -196,24 +201,20 @@ class BERTopicGPU(object):
             meta = pd.DataFrame()
             total_rows = 0
             
-            # Use estimated total for progress bar
             with tqdm(total=estimated_rows, desc="Loading data", 
-                     bar_format="{l_bar}{bar} [time left: {remaining}]", 
-                     ncols=100, colour="green") as pbar:
+                      bar_format="{l_bar}{bar} [time left: {remaining}]", 
+                      ncols=100, colour="green") as pbar:
                 for chunk in chunks:
                     try:
-                        # Log problematic rows
                         if len(chunk.columns) != expected_cols:
                             logger.warning(f"Found {len(chunk.columns)} columns, expected {expected_cols}")
                             continue
                         
-                        # Convert date and create year column
                         chunk['year'] = pd.to_datetime(
                             chunk['mostimportantdateutc'],
                             errors='coerce'
                         ).dt.year
                         
-                        # Filter by year
                         filtered_chunk = chunk[
                             (chunk['year'] >= self.YEAR_START) & 
                             (chunk['year'] <= self.YEAR_END)
@@ -226,7 +227,6 @@ class BERTopicGPU(object):
                             if total_rows % (gl.CHUNK_SIZE * 10) == 0:
                                 logger.info(f"Processed {total_rows} rows")
                         
-                        # Update progress bar by chunk size
                         pbar.update(len(chunk))
                     
                     except Exception as e:
@@ -243,16 +243,13 @@ class BERTopicGPU(object):
 
     def pre_process_text(self, data):
         logger.info("Starting text preprocessing")
-        
         try:
             # Disable GPU for preprocessing
             os.environ["CUDA_VISIBLE_DEVICES"] = ""
             
-            # Filter speaker type efficiently
             data = data.query('speakertypeid != 1')
             logger.info(f"After speaker filter: {len(data)} rows")
             
-            # Process text and dates
             data['text'] = data[gl.TEXT_COLUMN].astype(str)
             data['post_date'] = pd.to_datetime(data[gl.DATE_COLUMN], format='%Y-%m-%d', errors='coerce')
             data['post_year'] = data['post_date'].dt.year
@@ -262,7 +259,6 @@ class BERTopicGPU(object):
             if 'Unnamed: 0' in data.columns:
                 data.drop(columns=['Unnamed: 0'], inplace=True)
             
-            # Process text in batches
             nlp = NlpPreProcess()
             batch_size = 100
             processed_texts = []
@@ -270,7 +266,7 @@ class BERTopicGPU(object):
             for i in tqdm(range(0, len(data), batch_size), desc="Processing text"):
                 batch = data.iloc[i:i+batch_size]
                 batch_processed = batch.apply(
-                    lambda x: nlp.preprocess_file(pd.DataFrame([x]), 'text')[0], 
+                    lambda x: nlp.preprocess_file(pd.DataFrame([x]), 'text')[0],
                     axis=1
                 )
                 processed_texts.extend(batch_processed)
@@ -281,7 +277,7 @@ class BERTopicGPU(object):
             
             logger.info(f"Final number of documents: {len(docs)}")
             
-            # Re-enable GPU for later use
+            # Re-enable GPU for later use (if desired)
             os.environ["CUDA_VISIBLE_DEVICES"] = "0"
             return docs
 
@@ -293,48 +289,39 @@ class BERTopicGPU(object):
     def filter_empty_topics(self, topics):
         filtered_topics = {}
         for topic_num, topic_words in topics.items():
-            valid_words = [(word, score) for word, score in topic_words if word]  # Remove empty words
+            valid_words = [(word, score) for word, score in topic_words if word]
             if valid_words:
                 filtered_topics[topic_num] = valid_words
         return filtered_topics
 
     def compute_coherence_score(self, topic_model, texts):
-        # Get the top 10 words per topic
         topics = topic_model.get_topics()
-        print(f"Number of topics: {len(topics)}")
+        logger.info(f"Number of topics: {len(topics)}")
         filtered_topics = self.filter_empty_topics(topics)
-        # Extract topic words into a list of lists
-        topics_list = [[word for word, _ in topic_words] for topic_num, topic_words in filtered_topics.items() if topic_num != -1]
+        topics_list = [[word for word, _ in topic_words] 
+                       for topic_num, topic_words in filtered_topics.items() if topic_num != -1]
 
-        # Ensure texts are tokenized (i.e., a list of lists)
         if isinstance(texts[0], str):
-            texts = [doc.split() for doc in texts]  # Simple tokenization if they are in string format
+            texts = [doc.split() for doc in texts]
 
         dictionary = Dictionary(texts)
-        
-        # Initialize the CoherenceModel
         coherence_model = CoherenceModel(
-            topics=topics_list,  # Pass the list of topic words
+            topics=topics_list,
             texts=texts,
-            dictionary=dictionary,  # Create a Gensim dictionary 
+            dictionary=dictionary,
             coherence='c_v'
         )
-        # Compute the coherence score
         coherence_score = coherence_model.get_coherence()
         return coherence_score
 
-    # Helper function for processing batches
     def process_batch_gpu(self, i, batch_size, docs, embedding_model, N_):
         i_end = min(i + batch_size, N_)
         batch = docs[i:i_end]
-        
-        # Process in smaller sub-batches if needed
         sub_batch_size = 128
         batch_embeds = []
-        
         for j in range(0, len(batch), sub_batch_size):
             sub_batch = batch[j:j + sub_batch_size]
-            with torch.amp.autocast(device_type='cuda'):  # Updated from torch.cuda.amp.autocast()
+            with torch.amp.autocast(device_type='cuda'):
                 sub_batch_embed = embedding_model.encode(
                     sub_batch,
                     device=self.device,
@@ -343,12 +330,10 @@ class BERTopicGPU(object):
                     normalize_embeddings=True
                 )
             batch_embeds.append(sub_batch_embed)
-            
         batch_embed = np.vstack(batch_embeds)
         return batch_embed, i, i_end
 
     def print_gpu_memory(self):
-        """Print GPU memory usage with proper error handling"""
         try:
             if torch.cuda.is_available():
                 current_device = torch.cuda.current_device()
@@ -359,27 +344,45 @@ class BERTopicGPU(object):
         except Exception as e:
             logger.warning(f"Error getting GPU memory info: {e}")
     
+    def _calculate_optimal_batch_size(self, embedding_dim, default_batch_size=128):
+        if torch.cuda.is_available():
+            try:
+                gpu_props = torch.cuda.get_device_properties(0)
+                total_memory = gpu_props.total_memory  # in bytes
+                logger.info(f"GPU detected: {gpu_props.name} with {total_memory / 1e9:.2f}GB total memory")
+                mem_per_doc = embedding_dim * 4  # assuming float32
+                optimal_batch = int((total_memory * 0.7) / mem_per_doc)
+                optimal_batch = min(optimal_batch, 512)
+                logger.info(f"Optimal batch size based on GPU memory: {optimal_batch}")
+                return optimal_batch
+            except Exception as e:
+                logger.error(f"Error retrieving GPU properties: {e}. Falling back to default batch size.")
+                return default_batch_size
+        else:
+            logger.warning("CUDA not available. Using default batch size for CPU processing.")
+            return default_batch_size
+
     def Bertopic_run(self, docs):
         if not docs:
             raise ValueError("Empty document list")
         
         start_time = time.time()
         logger.info(f"Starting BERTopic processing with {len(docs)} documents")
-        
-        # More explicit GPU memory management
         if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            logger.info(f"GPU memory before processing: {torch.cuda.memory_allocated()/1e9:.2f}GB")
+            device = "cuda"
+            batch_size = 128
+            logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
+        else:
+            # return error
+            raise ValueError("CUDA not available")
+        embedding_dim = self.embedding_model.get_sentence_embedding_dimension()  # e.g., 384
+        batch_size = self._calculate_optimal_batch_size(embedding_dim, default_batch_size=gl.BATCH_SIZE)
         
-        embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
-        batch_size = self._calculate_optimal_batch_size(embedding_dim)
-        
-        # Process embeddings in batches
         embeddings = []
-        for i in tqdm(range(0, len(docs), batch_size)):
+        for i in tqdm(range(0, len(docs), batch_size), desc="Processing embeddings"):
             batch = docs[i:min(i + batch_size, len(docs))]
             if torch.cuda.is_available():
-                with torch.amp.autocast(device_type='cuda'):  # Updated from torch.cuda.amp.autocast()
+                with torch.amp.autocast(device_type='cuda'):
                     batch_embed = self.embedding_model.encode(
                         batch,
                         device=self.device,
@@ -394,51 +397,19 @@ class BERTopicGPU(object):
                     normalize_embeddings=True
                 )
             embeddings.append(batch_embed)
-                
-            # Clear GPU cache periodically
             if i % (batch_size * 5) == 0:
                 torch.cuda.empty_cache()
         
-        # Concatenate embeddings
         embeddings = np.vstack(embeddings)
         
-        # Reduce dimensionality before clustering
         if embeddings.shape[1] > 64:
             embeddings = self.reduce_dimensionality(embeddings, n_components=64)
         
-        # Train topic model with optimized parameters
         topic_model = self._train_topic_model(docs, embeddings)
-        
         logger.info(f"Processing completed in {time.time() - start_time:.2f}s")
         return topic_model
 
-    def _calculate_optimal_batch_size(self, gpu_mem, default_batch_size=128):
-        """
-        Returns an optimal batch size based on GPU memory if available.
-        Otherwise, returns a default batch size.
-        """
-        if torch.cuda.is_available():
-            try:
-                gpu_props = torch.cuda.get_device_properties(0)
-                total_memory = gpu_props.total_memory  # in bytes
-                logger.info(f"GPU detected: {gpu_props.name} with {total_memory / 1e9:.2f}GB total memory")
-                # Calculate an optimal batch size using 70% of GPU memory:
-                # (Assuming mem_per_doc = embedding_dim (e.g., 384) * 4 bytes)
-                mem_per_doc = 384 * 4  
-                optimal_batch = int((total_memory * 0.7) / mem_per_doc)
-                optimal_batch = min(optimal_batch, 512)  # cap for stability
-                logger.info(f"Optimal batch size based on GPU memory: {optimal_batch}")
-                return optimal_batch
-            except Exception as e:
-                logger.error(f"Error retrieving GPU properties: {e}. Falling back to default batch size.")
-                return default_batch_size
-        else:
-            logger.warning("CUDA not available. Using default batch size for CPU processing.")
-            return default_batch_size
-
-
     def _train_topic_model(self, docs, embeddings):
-        """Train the topic model with optimized parameters"""
         return BERTopic(
             umap_model=self.umap_model,
             hdbscan_model=self.hdbscan_model,
@@ -449,15 +420,15 @@ class BERTopicGPU(object):
         ).fit(docs, embeddings)
 
     def save_file(self, data, path, bar_length=100):
-        #write the doc to a txt file
         with open(path, 'w') as f:
-            with tqdm(total=len(data), desc="Saving data", bar_format="{l_bar}{bar} [time left: {remaining}]", ncols=bar_length, colour="green") as pbar:
+            with tqdm(total=len(data), desc="Saving data", 
+                      bar_format="{l_bar}{bar} [time left: {remaining}]", 
+                      ncols=bar_length, colour="green") as pbar:
                 for item in data:
                     f.write("%s\n" % item)
                     pbar.update(1)
                     
     def save_figures(self, topic_model):
-        # Save the visualization
         visualization_path = os.path.join(gl.output_fig_folder, f'bertopic{gl.num_topic_to_plot}.pdf')
         fig = topic_model.visualize_barchart(top_n_topics=gl.num_topic_to_plot)
         fig.write_image(visualization_path)
@@ -467,12 +438,8 @@ class BERTopicGPU(object):
         fig2.write_image(visualization_path.replace('.pdf', f'_heatmap_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{self.YEAR_START}_{self.YEAR_END}.pdf'))
         fig3 = topic_model.visualize_hierarchy()
         fig3.write_image(visualization_path.replace('.pdf', f'_hierarchy_{gl.N_NEIGHBORS[0]}_{gl.N_COMPONENTS[0]}_{gl.MIN_CLUSTER_SIZE[0]}_{gl.NR_TOPICS[0]}_{self.YEAR_START}_{self.YEAR_END}.pdf'))
-        print(f"Visualization saved to {visualization_path}")
+        logger.info(f"Visualization saved to {visualization_path}")
 
-    # def load_doc(self, path):
-    #     # load the doc from a txt file to a list
-    #     with open(path, 'r') as f:
-    #         return f.readlines()
     def reduce_dimensionality(self, embeddings, n_components=50):
         pca = PCA(n_components=n_components)
         reduced_embeddings = pca.fit_transform(embeddings)
@@ -480,10 +447,9 @@ class BERTopicGPU(object):
         return reduced_embeddings
 
     def manage_gpu_state(self, enable=True):
-        """Manage GPU state in a more flexible way"""
+        """Manage GPU state in a flexible way"""
         try:
             if enable and torch.cuda.is_available():
-                # Get available devices
                 device_count = torch.cuda.device_count()
                 devices = list(range(device_count))
                 os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, devices))
@@ -496,36 +462,27 @@ class BERTopicGPU(object):
             logger.warning(f"Error managing GPU state: {e}")
 
     def load_doc_chunk(self, chunk_start, chunk_size, path):
-        """Load a specific chunk of the document."""
         with open(path, 'r') as f:
-            f.seek(chunk_start)  # Move to the start of the chunk
+            f.seek(chunk_start)
             lines = f.read(chunk_size).splitlines()
         return lines
 
     def chunkify_file(self, path, num_chunks=cpu_count()):
-        """Determine file chunks for multiprocessing."""
         with open(path, 'r') as f:
-            f.seek(0, 2)  # Move to the end of the file
+            f.seek(0, 2)
             file_size = f.tell()
             chunk_size = file_size // num_chunks
-        
         chunk_starts = [i * chunk_size for i in range(num_chunks)]
         return chunk_starts, chunk_size
 
     def load_doc_parallel(self, path):
-        """Load documents from file using parallel processing with proper line handling"""
         logger.info(f"Loading documents from {path}")
-        
         try:
-            # First get total file size and line count
             with open(path, 'r', encoding='utf-8') as f:
-                file_size = os.path.getsize(path)
                 num_lines = sum(1 for _ in f)
             
-            # Calculate chunk sizes based on lines rather than bytes
-            num_processes = cpu_count() // 2  # Use half of available CPUs
+            num_processes = cpu_count() // 2
             chunk_size = max(1, num_lines // num_processes)
-            
             chunks = []
             with open(path, 'r', encoding='utf-8') as f:
                 current_chunk = []
@@ -534,10 +491,9 @@ class BERTopicGPU(object):
                     if len(current_chunk) >= chunk_size and i < num_lines - 1:
                         chunks.append(current_chunk)
                         current_chunk = []
-                if current_chunk:  # Add the last chunk
+                if current_chunk:
                     chunks.append(current_chunk)
             
-            # Process chunks in parallel
             with Pool(num_processes) as pool:
                 results = list(tqdm(
                     pool.imap(self._process_chunk, chunks),
@@ -545,58 +501,55 @@ class BERTopicGPU(object):
                     desc="Processing document chunks"
                 ))
             
-            # Flatten results and clean
             docs = [doc for chunk in results for doc in chunk if doc]
             docs = [doc.strip() for doc in docs if len(doc.strip()) > 30]
-            
             logger.info(f"Loaded {len(docs)} documents")
             return docs
-            
         except Exception as e:
             logger.error(f"Error loading documents: {e}")
             raise
 
     def _process_chunk(self, chunk):
-        """Process a chunk of documents"""
         try:
-            # Clean and validate each line
             processed = []
             for line in chunk:
                 if isinstance(line, str) and line.strip():
-                    # Basic cleaning
                     clean_line = line.strip()
-                    clean_line = re.sub(r'\s+', ' ', clean_line)  # Normalize whitespace
-                    if len(clean_line) > 30:  # Minimum length check
+                    clean_line = re.sub(r'\s+', ' ', clean_line)
+                    if len(clean_line) > 30:
                         processed.append(clean_line)
             return processed
         except Exception as e:
             logger.warning(f"Error processing chunk: {e}")
             return []
 
+    def _save_intermediate_results(self, topic_info_chunk, themes):
+        path = os.path.join(gl.output_folder, 'intermediate_results.csv')
+        topic_info_chunk['Theme'] = themes
+        topic_info_chunk.to_csv(path, index=False)
+        logger.info(f"Saved intermediate results to {path}")
+
+    def _save_final_results(self, topic_info):
+        path = os.path.join(gl.output_folder, 'final_topic_results.csv')
+        topic_info.to_csv(path, index=False)
+        logger.info(f"Saved final topic results to {path}")
+
     def save_topic_keywords(self, topic_model):
         try:
-            # Get topic information efficiently
             topic_info = topic_model.get_topic_info()
-            
-            # Initialize theme cache
             theme_cache = {}
             batch_size = 10
-            
-            # Process themes in batches with retries
             themes = []
-            for i in tqdm(range(0, len(topic_info), batch_size)):
+            logger.info(f"columns of topic_info: {topic_info.columns}")
+            for i in tqdm(range(0, len(topic_info), batch_size), desc="Generating topic themes"):
                 batch = topic_info.iloc[i:i+batch_size]
                 batch_themes = []
-                
                 for _, row in batch.iterrows():
                     keywords = row['Representation']
                     cache_key = str(sorted(keywords[:5]))
-                    
                     if cache_key in theme_cache:
                         batch_themes.append(theme_cache[cache_key])
                         continue
-                    
-                    # Generate theme with retry mechanism
                     max_retries = 3
                     for attempt in range(max_retries):
                         try:
@@ -610,32 +563,22 @@ class BERTopicGPU(object):
                                 theme = ' & '.join(str(k).replace('_', ' ').title() for k in keywords[:3])
                                 batch_themes.append(theme)
                         time.sleep(1)
-                
                 themes.extend(batch_themes)
-                
-            # Save final results
+                if i % (batch_size * 5) == 0:
+                    self._save_intermediate_results(topic_info.iloc[:i+batch_size], themes)
             topic_info['Theme'] = themes
             self._save_final_results(topic_info)
-            
         except Exception as e:
             logger.error(f"Error in save_topic_keywords: {e}")
             raise
 
     def generate_topic_theme(self, keywords, representative_docs):
-        """Generate a descriptive theme using GPT for a set of keywords and representative documents"""
         try:
-            # Clean and format keywords
             if isinstance(keywords, str):
                 keywords = eval(keywords) if keywords.startswith('[') else keywords.split(', ')
-            
-            # Take top keywords and clean them
             top_keywords = [k.replace('_', ' ') for k in keywords[:5]]
-            
-            # Get representative text samples (limited to reduce token count)
             doc_samples = representative_docs[:2] if representative_docs else []
             doc_context = "\nExample discussions:\n" + "\n".join(doc_samples) if doc_samples else ""
-            
-            # Create a focused prompt
             prompt = f"""
             Analyze these earnings call keywords and create a concise business theme (2-4 words):
             
@@ -648,14 +591,7 @@ class BERTopicGPU(object):
             - Be specific but concise (2-3 words)
             - Focus on the main business concept or metric
             - Avoid generic terms like "business" or "corporate" unless essential
-            
-            Example good themes for different keyword sets:
-            - revenue, growth, margin → "Revenue Growth Performance"
-            - capacity, utilization, efficiency → "Operational Capacity Management"
-            - market, share, penetration → "Market Share Expansion"
-            - product, launch, innovation → "Product Innovation Strategy"
             """
-            
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
@@ -667,35 +603,17 @@ class BERTopicGPU(object):
                 presence_penalty=0.1,
                 frequency_penalty=0.1
             )
-            
             theme = response.choices[0].message['content'].strip()
-            
-            # Validate theme length and format
             words = theme.split()
             if len(words) < 2 or len(words) > 5:
-                # Fallback to a simpler format if theme is too long/short
                 return ' '.join(word.title() for word in top_keywords[:3])
-            
             return theme
-
         except Exception as e:
-            print(f"Error generating theme: {e}")
-            # Fallback: Create a simple theme from top keywords
+            logger.error(f"Error generating theme: {e}")
             fallback_keywords = [k.replace('_', ' ').title() for k in keywords[:3]]
             return ' & '.join(fallback_keywords)
 
     def optimize_model_parameters(self, docs, test_params=None):
-        """
-        Optimize BERTopic model parameters using grid search and coherence scores.
-        
-        Args:
-            docs: List of documents
-            test_params: Dictionary of parameters to test (optional)
-        
-        Returns:
-            best_params: Dictionary of optimal parameters
-            best_score: Best coherence score achieved
-        """
         if test_params is None:
             test_params = {
                 'n_neighbors': [5, 15, 30],
@@ -708,8 +626,7 @@ class BERTopicGPU(object):
         best_params = None
         results = []
         
-        # Calculate embeddings once to reuse
-        print("Calculating document embeddings...")
+        logger.info("Calculating document embeddings for parameter optimization...")
         embeddings = np.zeros((len(docs), self.embedding_model.get_sentence_embedding_dimension()), dtype=np.float32)
         batch_size = gl.BATCH_SIZE
         
@@ -717,13 +634,11 @@ class BERTopicGPU(object):
             batch_embed, _, i_end = self.process_batch_gpu(i, batch_size, docs, self.embedding_model, len(docs))
             embeddings[i:i_end, :] = batch_embed
         
-        # Generate parameter combinations
         param_combinations = [dict(zip(test_params.keys(), v)) 
-                             for v in itertools.product(*test_params.values())]
+                              for v in itertools.product(*test_params.values())]
         
         for params in tqdm(param_combinations, desc="Testing parameter combinations"):
             try:
-                # Update models with current parameters
                 self.umap_model = UMAP(
                     n_neighbors=params['n_neighbors'],
                     n_components=params['n_components'],
@@ -732,7 +647,6 @@ class BERTopicGPU(object):
                     low_memory=False,
                     n_jobs=-1
                 )
-                
                 self.hdbscan_model = HDBSCAN(
                     min_cluster_size=params['min_cluster_size'],
                     min_samples=params['min_samples'],
@@ -741,8 +655,6 @@ class BERTopicGPU(object):
                     algorithm='best',
                     memory=Memory(location=gl.output_folder)
                 )
-                
-                # Create and fit topic model
                 topic_model = BERTopic(
                     embedding_model=self.embedding_model,
                     umap_model=self.umap_model,
@@ -751,125 +663,79 @@ class BERTopicGPU(object):
                     calculate_probabilities=False,
                     verbose=True
                 )
-                
-                # Fit the model
                 topic_model.fit_transform(docs, embeddings=embeddings)
-                
-                # Calculate coherence score
                 coherence_score = self.compute_coherence_score(topic_model, docs)
-                
-                # Store results
                 results.append({
                     'params': params,
                     'coherence_score': coherence_score,
                     'n_topics': len(topic_model.get_topics())
                 })
-                
-                # Update best parameters if necessary
                 if coherence_score > best_score:
                     best_score = coherence_score
                     best_params = params
-                    
-                # Clear GPU memory
                 torch.cuda.empty_cache()
-                
             except Exception as e:
-                print(f"Error with parameters {params}: {str(e)}")
+                logger.error(f"Error with parameters {params}: {str(e)}")
                 continue
         
-        # Save results to CSV
         results_df = pd.DataFrame(results)
-        results_df.to_csv(os.path.join(gl.output_folder, 'parameter_optimization_results.csv'), index=False)
-        
-        print(f"\nBest parameters found:")
-        print(f"Parameters: {best_params}")
-        print(f"Coherence score: {best_score}")
+        results_csv_path = os.path.join(gl.output_folder, 'parameter_optimization_results.csv')
+        results_df.to_csv(results_csv_path, index=False)
+        logger.info(f"Saved parameter optimization results to {results_csv_path}")
+        logger.info(f"Best parameters found: {best_params} with coherence score: {best_score}")
         
         return best_params, best_score
 
     def generate_topic_name(self, keywords):
-        """Generate a descriptive topic name from a list of keywords"""
-        # Convert string representation of list to actual list
         if isinstance(keywords, str):
-            # Remove brackets and quotes, split by commas
             keywords = keywords.strip("[]'").replace("'", "").split(", ")
-        
-        # Dictionary mapping keyword patterns to topic names
         topic_patterns = {
-            # Financial Performance & Metrics
             ('growth', 'outlook', 'seasonality'): 'Growth and Financial Outlook',
             ('gross_margin', 'margin', 'revenue'): 'Margin and Revenue Performance',
             ('tax_rate', 'tax_reform', 'tax'): 'Tax and Regulatory Matters',
             ('share_buyback', 'share_repurchase', 'capital'): 'Capital Allocation and Buybacks',
-            
-            # Operations & Efficiency
             ('capacity_utilization', 'efficiency', 'automation'): 'Operational Efficiency',
             ('product', 'launch', 'innovation'): 'Product Development and Innovation',
             ('market', 'share', 'penetration'): 'Market Position and Strategy',
-            
-            # Corporate Communications
             ('prepared_remark', 'prepare_remark', 'mention_prepared'): 'Prepared Remarks',
             ('organic_growth', 'organic', 'dry_powder'): 'Organic Growth Strategy',
             ('geography', 'region', 'expansion'): 'Geographic Expansion',
             ('mix', 'product', 'portfolio'): 'Product Mix and Portfolio',
-            
-            # Management & Structure
             ('board', 'restructuring', 'change'): 'Corporate Governance',
             ('give_color', 'timing', 'time_frame'): 'Forward-Looking Commentary',
             ('permit', 'regulatory', 'compliance'): 'Regulatory Compliance',
             ('headwind', 'tailwind', 'margin'): 'Business Environment Factors',
-            
-            # Operations & Logistics
             ('turnover', 'retention', 'talent'): 'Workforce Management',
             ('supply_chain', 'supplier', 'supply'): 'Supply Chain Management',
             ('store', 'online', 'sale'): 'Retail and E-commerce',
             ('watch_list', 'stay_tune', 'tenant'): 'Risk Monitoring',
             ('dry_dock', 'container', 'port'): 'Maritime Operations'
         }
-        
-        # Check keywords against patterns
         for pattern, topic_name in topic_patterns.items():
             if any(keyword in keywords for keyword in pattern):
                 return topic_name
-            
-        # Default case - take first 3 keywords and make a generic name
         first_three = keywords[:3]
         return ' & '.join(word.replace('_', ' ').title() for word in first_three)
 
     def add_topic_names(self, df):
-        """Add descriptive topic names to the dataframe"""
         df['Topic_Name'] = df['Representation'].apply(self.generate_topic_name)
         return df
 
     def validate_theme(self, theme, keywords):
-        """Validate and clean generated themes"""
-        # Handle different keyword formats
         if not isinstance(keywords, list):
             try:
-                # Try to evaluate if it's a string representation of a list
                 keywords = eval(keywords) if isinstance(keywords, str) else keywords
             except:
-                # If eval fails, split by comma
                 keywords = keywords.strip("[]'").replace("'", "").split(", ")
-        
-        # Remove any unwanted characters or formatting
         theme = theme.strip('"\'').strip()
-        
-        # Check if theme is too generic
         generic_terms = {'topic', 'theme', 'discussion', 'earnings call', 'business'}
         theme_words = set(theme.lower().split())
-        
         if theme_words.issubset(generic_terms):
-            # If theme is too generic, use keywords
             return ' '.join(k.replace('_', ' ').title() for k in keywords[:3])
-        
-        # Ensure proper capitalization
         theme = ' '.join(word.capitalize() for word in theme.split())
-        
         return theme
 
     def monitor_memory(self):
-        """Monitor memory usage"""
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -880,22 +746,34 @@ class BERTopicGPU(object):
         except Exception as e:
             logger.warning(f"Error monitoring memory: {e}")
 
+    def initialize_gpu(self):
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            print(f"Using GPU: {torch.cuda.get_device_name(0)}")
+            # Set memory growth
+            torch.cuda.set_per_process_memory_growth(True)
+        else:
+            device = torch.device("cpu")
+            print("CUDA not available, using CPU")
+        return device
+
+
 if __name__ == "__main__":
-    # Set multiprocessing start method
     mp.set_start_method('spawn', force=True)
     
     YEAR_START = 2005
     YEAR_END = 2010
     logger.info(f"Processing data for years {YEAR_START}-{YEAR_END}")
     
-    # Force CPU for preprocessing
+    # Disable GPU for preprocessing
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
     
     bt = BERTopicGPU(YEAR_START, YEAR_END)
     docs_path = os.path.join(gl.output_folder, f'preprocessed_docs_{YEAR_START}_{YEAR_END}.txt')
-    bt.manage_gpu_state(enable=False)  # Disable for preprocessing
-
+    
     try:
+        # Disable GPU explicitly for preprocessing using helper method
+        bt.manage_gpu_state(enable=False)
         if os.path.exists(docs_path):
             logger.info(f"Loading preprocessed docs from {docs_path}")
             docs = bt.load_doc_parallel(docs_path)
@@ -905,11 +783,9 @@ if __name__ == "__main__":
             logger.info("Processing raw data...")
             meta = bt.load_data()
             logger.info(f"Loaded {len(meta)} rows of raw data")
-            
             if not meta.empty:
                 docs = bt.pre_process_text(meta)
                 logger.info(f"Generated {len(docs)} documents")
-                
                 if docs:
                     bt.save_file(docs, docs_path, bar_length=100)
                     logger.info(f"Saved preprocessed docs to {docs_path}")
@@ -920,16 +796,14 @@ if __name__ == "__main__":
                 logger.error("No data loaded!")
                 sys.exit(1)
         
-        # Re-enable GPU for BERTopic
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        # Re-enable GPU for BERTopic processing
+        bt.manage_gpu_state(enable=True)
         torch.cuda.empty_cache()
         
-        # Continue with BERTopic processing
         topic_model = bt.Bertopic_run(docs)
         bt.save_topic_keywords(topic_model)
         bt.save_figures(topic_model)
         logger.info("BERTopic model training completed.")
-        
     except Exception as e:
         logger.error(f"Error in main process: {e}")
         logger.error(traceback.format_exc())
